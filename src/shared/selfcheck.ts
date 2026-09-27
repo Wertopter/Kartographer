@@ -69,7 +69,9 @@ const campaign: Campaign = {
       label: 'A',
       color: '#fff',
       imageFile: null,
-      visibleToPlayers: true
+      visibleToPlayers: true,
+      libraryId: null,
+      temporary: false
     },
     {
       id: 'in-fog',
@@ -80,7 +82,9 @@ const campaign: Campaign = {
       label: 'B',
       color: '#fff',
       imageFile: 'secret.png',
-      visibleToPlayers: true
+      visibleToPlayers: true,
+      libraryId: 'lib-b',
+      temporary: false
     },
     {
       id: 'hidden',
@@ -91,9 +95,12 @@ const campaign: Campaign = {
       label: 'Secret',
       color: '#fff',
       imageFile: null,
-      visibleToPlayers: false
+      visibleToPlayers: false,
+      libraryId: null,
+      temporary: true
     }
-  ]
+  ],
+  library: []
 }
 
 const projection = toPlayerProjection(

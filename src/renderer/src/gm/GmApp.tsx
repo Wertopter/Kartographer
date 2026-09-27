@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Camera, GmState, GmToken, GridSettings } from '@shared/types'
+import { TOKEN_COLORS } from '@shared/types'
+import { CampaignList } from '@renderer/gm/CampaignList'
 import { GridPanel } from '@renderer/gm/GridPanel'
 import { SceneList } from '@renderer/gm/SceneList'
 import { TokenInspector } from '@renderer/gm/TokenInspector'
+import { TokenPlacePanel, type TokenPlaceMode } from '@renderer/gm/TokenPlacePanel'
 import { Toolbar } from '@renderer/gm/Toolbar'
 import { isTypingTarget, type Tool } from '@renderer/tools'
 import { throttle } from '@renderer/throttle'
@@ -31,6 +34,12 @@ export function GmApp(): React.JSX.Element {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [displayId, setDisplayId] = useState<number | null>(null)
   const [campaignName, setCampaignName] = useState('')
+  const [tokenMode, setTokenMode] = useState<TokenPlaceMode>('new')
+  const [tokenLabel, setTokenLabel] = useState('')
+  const [tokenColor, setTokenColor] = useState<string>(TOKEN_COLORS[0])
+  const [tokenVisible, setTokenVisible] = useState(true)
+  const [tokenImage, setTokenImage] = useState<string | null>(null)
+  const [libraryPick, setLibraryPick] = useState<string | null>(null)
 
   const scene = state?.scenes.find((item) => item.id === state.activeSceneId) ?? null
   const sceneIdRef = useRef<string | null>(null)
@@ -40,6 +49,14 @@ export function GmApp(): React.JSX.Element {
 
   useEffect(() => setCampaignName(state?.campaignName ?? ''), [state?.campaignName])
   useEffect(() => setSelectedId(null), [scene?.id])
+  useEffect(() => {
+    setTokenImage((current) => {
+      if (current) void window.kartographer.releaseStagedImage(current)
+      return null
+    })
+    setLibraryPick(null)
+    setTokenLabel('')
+  }, [state?.campaignDir])
   useEffect(() => {
     if (selectedId && state && !state.tokens.some((token) => token.id === selectedId)) setSelectedId(null)
   }, [selectedId, state])
@@ -141,7 +158,7 @@ export function GmApp(): React.JSX.Element {
     return (
       <div className="boot">
         <p className="wordmark">Kartographer</p>
-        <p>Opening the campaign…</p>
+        <p>Opening Kartographer…</p>
       </div>
     )
   }
@@ -158,24 +175,41 @@ export function GmApp(): React.JSX.Element {
       <aside className="sidebar">
         <div className="brand">
           <p className="wordmark">Kartographer</p>
-          <input
-            aria-label="Campaign name"
-            value={campaignName}
-            onChange={(event) => setCampaignName(event.target.value)}
-            onBlur={() => {
-              if (campaignName.trim() && campaignName !== state.campaignName) {
-                void window.kartographer.command({ type: 'renameCampaign', name: campaignName })
-              }
-            }}
-          />
+          {state.campaignOpen && (
+            <input
+              aria-label="Campaign name"
+              value={campaignName}
+              onChange={(event) => setCampaignName(event.target.value)}
+              onBlur={() => {
+                if (campaignName.trim() && campaignName !== state.campaignName) {
+                  void window.kartographer.command({ type: 'renameCampaign', name: campaignName })
+                }
+              }}
+            />
+          )}
         </div>
+        <CampaignList
+          currentPath={state.campaignDir}
+          campaigns={state.recentCampaigns}
+          onCreate={() => void window.kartographer.createCampaignFolder()}
+          onBrowse={() => void window.kartographer.openCampaignFolder()}
+          onOpen={(folder) => void window.kartographer.switchCampaign(folder)}
+          onForget={(folder) => void window.kartographer.forgetCampaign(folder)}
+        />
         <div className="sidebar-head">
           <h2>Scenes</h2>
-          <button type="button" className="primary" onClick={() => void window.kartographer.importScenes()}>
+          <button
+            type="button"
+            className="primary"
+            disabled={!state.campaignOpen}
+            onClick={() => void window.kartographer.importScenes()}
+          >
             Import
           </button>
         </div>
-        {state.scenes.length === 0 ? (
+        {!state.campaignOpen ? (
+          <p className="empty-copy">Open a campaign folder to add scenes.</p>
+        ) : state.scenes.length === 0 ? (
           <p className="empty-copy">Import a battle map, handout, or splash image. Maps start covered in fog.</p>
         ) : (
           <SceneList
@@ -201,7 +235,20 @@ export function GmApp(): React.JSX.Element {
           }}
         />
         <div className="stage-body">
-          {scene ? (
+          {!state.campaignOpen ? (
+            <div className="viewport-empty">
+              <p className="wordmark">Choose a campaign</p>
+              <p>Give each campaign its own folder. That folder keeps the maps, fog, and tokens.</p>
+              <div className="campaign-actions">
+                <button type="button" className="primary" onClick={() => void window.kartographer.createCampaignFolder()}>
+                  New folder…
+                </button>
+                <button type="button" onClick={() => void window.kartographer.openCampaignFolder()}>
+                  Open folder…
+                </button>
+              </div>
+            </div>
+          ) : scene ? (
             <MapViewport
               role="gm"
               sceneId={scene.id}
@@ -230,7 +277,30 @@ export function GmApp(): React.JSX.Element {
               onCamera={sendCamera}
               onPaint={sendPaint}
               onPointer={(x, y) => void window.kartographer.command({ type: 'pointer', sceneId: scene.id, x, y })}
-              onPlaceToken={(x, y) => void window.kartographer.command({ type: 'addToken', sceneId: scene.id, x, y })}
+              onPlaceToken={(x, y) => {
+                if (tokenMode === 'existing') {
+                  if (!libraryPick) return
+                  void window.kartographer.command({
+                    type: 'placeLibraryToken',
+                    sceneId: scene.id,
+                    x,
+                    y,
+                    libraryId: libraryPick
+                  })
+                  return
+                }
+                void window.kartographer.command({
+                  type: 'addToken',
+                  sceneId: scene.id,
+                  x,
+                  y,
+                  kind: tokenMode,
+                  label: tokenLabel,
+                  color: tokenColor,
+                  imageFile: tokenImage,
+                  visibleToPlayers: tokenVisible
+                })
+              }}
               onMoveToken={sendMove}
               onSelectToken={setSelectedId}
               onGridOffset={(offsetX, offsetY) => sendGrid({ ...scene.grid, offsetX, offsetY })}
@@ -254,6 +324,41 @@ export function GmApp(): React.JSX.Element {
               calibrate={calibrate}
               onCalibrate={setCalibrate}
               onChange={sendGrid}
+            />
+          )}
+          {scene && mapTools && activeTool === 'token' && (
+            <TokenPlacePanel
+              mode={tokenMode}
+              onMode={setTokenMode}
+              label={tokenLabel}
+              onLabel={setTokenLabel}
+              color={tokenColor}
+              onColor={setTokenColor}
+              visible={tokenVisible}
+              onVisible={setTokenVisible}
+              imageFile={tokenImage}
+              onChooseImage={() => {
+                void window.kartographer.stageTokenImage().then((file) => {
+                  if (!file) return
+                  setTokenImage((current) => {
+                    if (current && current !== file) void window.kartographer.releaseStagedImage(current)
+                    return file
+                  })
+                })
+              }}
+              onClearImage={() => {
+                setTokenImage((current) => {
+                  if (current) void window.kartographer.releaseStagedImage(current)
+                  return null
+                })
+              }}
+              library={state.library}
+              selectedLibraryId={libraryPick}
+              onSelectLibrary={setLibraryPick}
+              onDeleteLibrary={(libraryId) => {
+                if (libraryPick === libraryId) setLibraryPick(null)
+                void window.kartographer.command({ type: 'deleteLibraryToken', libraryId })
+              }}
             />
           )}
           {selected && (
@@ -324,7 +429,13 @@ export function GmApp(): React.JSX.Element {
             : 'Players see revealed map cells, visible tokens, and pointer pings.'}
           {state.status ? ` ${state.status}` : ''}
         </p>
-        <button type="button" className="path" title={state.campaignDir} onClick={() => void window.kartographer.revealCampaign()}>
+        <button
+          type="button"
+          className="path"
+          title={state.campaignDir}
+          disabled={!state.campaignOpen}
+          onClick={() => void window.kartographer.revealCampaign()}
+        >
           Show campaign folder
         </button>
       </footer>

@@ -6,9 +6,15 @@ export const channels = {
   command: 'kartographer:command',
   importScenes: 'kartographer:import-scenes',
   chooseTokenImage: 'kartographer:choose-token-image',
+  stageTokenImage: 'kartographer:stage-token-image',
+  releaseStagedImage: 'kartographer:release-staged-image',
   openPlayerWindow: 'kartographer:open-player-window',
   closePlayerWindow: 'kartographer:close-player-window',
   revealCampaign: 'kartographer:reveal-campaign',
+  createCampaignFolder: 'kartographer:create-campaign-folder',
+  openCampaignFolder: 'kartographer:open-campaign-folder',
+  switchCampaign: 'kartographer:switch-campaign',
+  forgetCampaign: 'kartographer:forget-campaign',
   gmState: 'kartographer:gm-state',
   playerState: 'kartographer:player-state'
 } as const
@@ -21,9 +27,15 @@ export type KartographerApi = {
   command: (command: Command) => Promise<void>
   importScenes: () => Promise<void>
   chooseTokenImage: (tokenId: string) => Promise<void>
+  stageTokenImage: () => Promise<string | null>
+  releaseStagedImage: (file: string) => Promise<void>
   openPlayerWindow: (displayId: number | null) => Promise<void>
   closePlayerWindow: () => Promise<void>
   revealCampaign: () => Promise<void>
+  createCampaignFolder: () => Promise<void>
+  openCampaignFolder: () => Promise<void>
+  switchCampaign: (folder: string) => Promise<void>
+  forgetCampaign: (folder: string) => Promise<void>
 }
 
 export type { DisplayInfo }

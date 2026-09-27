@@ -132,10 +132,63 @@ input, select {
 
 .scene-list {
   overflow: auto;
+  flex: 1;
   padding: 0.4rem 0.7rem 1rem;
   display: flex;
   flex-direction: column;
   gap: 0.55rem;
+  min-height: 0;
+}
+
+.campaign-actions {
+  display: flex;
+  gap: 0.4rem;
+  padding: 0 0.9rem 0.45rem;
+}
+
+.campaign-list {
+  overflow: auto;
+  max-height: 28vh;
+  padding: 0 0.7rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.campaign-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.campaign-row.current .campaign-open { border-color: var(--accent); }
+
+.campaign-open {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  min-width: 0;
+  text-align: left;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.campaign-name {
+  font-weight: 650;
+}
+
+.campaign-path {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--faint);
+  font-size: 0.72rem;
+}
+
+.campaign-forget {
+  padding: 0.3rem 0.45rem;
 }
 
 .scene-card {
@@ -283,7 +336,33 @@ button[aria-pressed="true"] kbd { color: var(--accent-ink); }
   box-shadow: var(--shadow);
 }
 
-.grid-panel { top: 12px; left: 12px; }
+.token-panel { top: 12px; left: 12px; width: 320px; }
+.token-modes, .library-list { display: flex; flex-direction: column; gap: 0.35rem; }
+.token-modes button { text-align: left; }
+.library-list { max-height: 220px; overflow: auto; }
+.library-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.35rem;
+  align-items: center;
+}
+.library-card {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 0.45rem;
+  align-items: center;
+  text-align: left;
+  min-width: 0;
+}
+.library-card img, .library-swatch, .staged-image img {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
+.library-swatch { border: 1px solid var(--line); }
+.staged-image { display: flex; align-items: center; gap: 0.4rem; }
 .inspector { top: 12px; right: 12px; }
 
 .floating-panel label, .statusbar label {

@@ -102,6 +102,16 @@ if (!hasLock) {
     }
   }
 
+  async function chooseCampaignFolder(asNew: boolean): Promise<void> {
+    if (!session || !gmWindow) return
+    const result = await dialog.showOpenDialog(gmWindow, {
+      title: asNew ? 'Choose a folder for the new campaign' : 'Open a campaign folder',
+      properties: asNew ? ['openDirectory', 'createDirectory', 'promptToCreate'] : ['openDirectory']
+    })
+    if (result.canceled || result.filePaths.length === 0) return
+    await session.openCampaignFolder(result.filePaths[0], asNew)
+  }
+
   async function importScenes(): Promise<void> {
     if (!session || !gmWindow) return
     const result = await dialog.showOpenDialog(gmWindow, {
@@ -124,6 +134,17 @@ if (!hasLock) {
     await session.chooseTokenImage(tokenId, result.filePaths[0])
   }
 
+  async function stageTokenImage(): Promise<string | null> {
+    if (!session || !gmWindow) return null
+    const result = await dialog.showOpenDialog(gmWindow, {
+      title: 'Choose a token image',
+      properties: ['openFile'],
+      filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }]
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+    return session.stageTokenImage(result.filePaths[0])
+  }
+
   function installMenu(): void {
     const isMac = process.platform === 'darwin'
     Menu.setApplicationMenu(
@@ -132,11 +153,14 @@ if (!hasLock) {
         {
           label: 'File',
           submenu: [
+            { label: 'New Campaign Folder…', accelerator: 'CmdOrCtrl+Shift+N', click: () => void chooseCampaignFolder(true) },
+            { label: 'Open Campaign Folder…', accelerator: 'CmdOrCtrl+Shift+O', click: () => void chooseCampaignFolder(false) },
             { label: 'Import Images…', accelerator: 'CmdOrCtrl+O', click: () => void importScenes() },
             {
               label: 'Show Campaign Folder',
               click: () => {
-                if (session) shell.showItemInFolder(session.campaignFile)
+                const file = session?.campaignFile
+                if (file) shell.showItemInFolder(file)
               }
             },
             { type: 'separator' },
@@ -200,6 +224,14 @@ if (!hasLock) {
       if (!isGm(event.sender.id) || typeof tokenId !== 'string') return
       return chooseTokenImage(tokenId)
     })
+    ipcMain.handle(channels.stageTokenImage, (event) => {
+      if (!isGm(event.sender.id)) return null
+      return stageTokenImage()
+    })
+    ipcMain.handle(channels.releaseStagedImage, (event, file: string) => {
+      if (!isGm(event.sender.id) || typeof file !== 'string') return
+      return session?.releaseStagedImage(file)
+    })
     ipcMain.handle(channels.openPlayerWindow, (event, displayId: number | null) => {
       if (!isGm(event.sender.id)) return
       presentPlayerWindow(typeof displayId === 'number' ? displayId : null)
@@ -210,7 +242,23 @@ if (!hasLock) {
     })
     ipcMain.handle(channels.revealCampaign, (event) => {
       if (!isGm(event.sender.id) || !session) return
-      shell.showItemInFolder(session.campaignFile)
+      if (session.campaignFile) shell.showItemInFolder(session.campaignFile)
+    })
+    ipcMain.handle(channels.createCampaignFolder, (event) => {
+      if (!isGm(event.sender.id)) return
+      return chooseCampaignFolder(true)
+    })
+    ipcMain.handle(channels.openCampaignFolder, (event) => {
+      if (!isGm(event.sender.id)) return
+      return chooseCampaignFolder(false)
+    })
+    ipcMain.handle(channels.switchCampaign, (event, folder: string) => {
+      if (!isGm(event.sender.id) || typeof folder !== 'string') return
+      return session?.openCampaignFolder(folder, false)
+    })
+    ipcMain.handle(channels.forgetCampaign, (event, folder: string) => {
+      if (!isGm(event.sender.id) || typeof folder !== 'string') return
+      return session?.forgetCampaign(folder)
     })
   }).catch((error: unknown) => {
     console.error(error)

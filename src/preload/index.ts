@@ -28,6 +28,10 @@ const api: KartographerApi = {
   chooseTokenImage: async (tokenId: string) => {
     await ipcRenderer.invoke(channels.chooseTokenImage, tokenId)
   },
+  stageTokenImage: () => ipcRenderer.invoke(channels.stageTokenImage) as Promise<string | null>,
+  releaseStagedImage: async (file: string) => {
+    await ipcRenderer.invoke(channels.releaseStagedImage, file)
+  },
   openPlayerWindow: async (displayId: number | null) => {
     await ipcRenderer.invoke(channels.openPlayerWindow, displayId)
   },
@@ -36,6 +40,18 @@ const api: KartographerApi = {
   },
   revealCampaign: async () => {
     await ipcRenderer.invoke(channels.revealCampaign)
+  },
+  createCampaignFolder: async () => {
+    await ipcRenderer.invoke(channels.createCampaignFolder)
+  },
+  openCampaignFolder: async () => {
+    await ipcRenderer.invoke(channels.openCampaignFolder)
+  },
+  switchCampaign: async (folder: string) => {
+    await ipcRenderer.invoke(channels.switchCampaign, folder)
+  },
+  forgetCampaign: async (folder: string) => {
+    await ipcRenderer.invoke(channels.forgetCampaign, folder)
   }
 }
 

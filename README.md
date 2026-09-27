@@ -32,17 +32,21 @@ Handouts are plain images. Mark a scene as a handout when it should ignore the g
 - **Pointer** (P) drops a ping. Players see it only on a revealed cell.
 - **Reveal** (R) and **Hide** (H) paint fog by grid cell. You see the map dimmed under the fog. Players see only revealed cells.
 - **Show map** and **Cover map** reveal or hide every cell.
-- **Token** (T) places a marker. Drag it to move it. Tokens snap to the grid while the grid is on. Hide a token from players when a monster has not appeared yet, or give it an image.
+- **Token** (T) places a marker. Choose **Create a new token** to save it in this campaign’s token library, **Select from existing tokens** to place one again, or **Temporary token** for a marker that works the same way but is not saved in the library. Drag a token to move it. Tokens snap to the grid while the grid is on. Hide a token from players when a monster has not appeared yet, or give it an image.
 - **Grid** (G) sets the square cell size, offset, and color. Slide the grid to line it up, or drag one cell to measure its size. Changing the size or offset clears revealed fog, because the cells no longer match the map.
 
 ## Saved campaigns
 
-Kartographer keeps one campaign on this computer:
+Each campaign is a folder you choose. Kartographer writes `campaign.json` and an `assets/` directory inside that folder. The JSON stores scenes, cameras, grid calibration, fog, and tokens. The image copies live in `assets/`, so the campaign still opens if the original files move.
 
-- macOS: `~/Library/Application Support/Kartographer/campaign`
-- Windows: `%APPDATA%\Kartographer\campaign`
+Use **New folder…** to create a campaign in an empty folder, or **Open folder…** to use one that already has a campaign. The sidebar lists folders you have used. **Remove** only drops a folder from that list. It does not delete the folder. **Show campaign folder** opens the current one.
 
-`campaign.json` stores scenes, cameras, grid calibration, fog, and tokens. `assets/` holds copies of the images, so the campaign still opens if the original files move. **Show campaign folder** opens that location. Copy the whole `campaign` folder to another computer to move a game between a Windows machine and a MacBook.
+The list of folders is remembered here:
+
+- macOS: `~/Library/Application Support/Kartographer/library.json`
+- Windows: `%APPDATA%\Kartographer\library.json`
+
+Copy a campaign folder to another computer to move that game between Windows and a MacBook. Open it there with **Open folder…**.
 
 ## Installers
 

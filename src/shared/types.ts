@@ -46,6 +46,18 @@ export type Token = {
   color: string
   imageFile: string | null
   visibleToPlayers: boolean
+  /** Set when this token was saved to, or placed from, the library. */
+  libraryId: string | null
+  /** A temporary token is not written to the library. */
+  temporary: boolean
+}
+
+export type LibraryToken = {
+  id: string
+  label: string
+  color: string
+  imageFile: string | null
+  visibleToPlayers: boolean
 }
 
 export type Campaign = {
@@ -54,6 +66,7 @@ export type Campaign = {
   activeSceneId: string | null
   scenes: Scene[]
   tokens: Token[]
+  library: LibraryToken[]
 }
 
 export type PointerPing = {
@@ -104,13 +117,23 @@ export type PlayerProjection = {
 
 export type GmScene = Scene & { imageUrl: string }
 export type GmToken = Token & { imageUrl: string | null }
+export type GmLibraryToken = LibraryToken & { imageUrl: string | null }
+
+export type RecentCampaign = {
+  path: string
+  name: string
+  missing: boolean
+}
 
 export type GmState = {
+  campaignOpen: boolean
   campaignName: string
   campaignDir: string
+  recentCampaigns: RecentCampaign[]
   activeSceneId: string | null
   scenes: GmScene[]
   tokens: GmToken[]
+  library: GmLibraryToken[]
   pointer: PointerPing | null
   displays: DisplayInfo[]
   playerWindowOpen: boolean
@@ -128,7 +151,19 @@ export type Command =
   | { type: 'paintFog'; sceneId: string; cells: number[]; mode: 'reveal' | 'hide' }
   | { type: 'revealAll'; sceneId: string }
   | { type: 'coverAll'; sceneId: string }
-  | { type: 'addToken'; sceneId: string; x: number; y: number }
+  | {
+      type: 'addToken'
+      sceneId: string
+      x: number
+      y: number
+      kind: 'new' | 'temporary'
+      label: string
+      color: string
+      imageFile: string | null
+      visibleToPlayers: boolean
+    }
+  | { type: 'placeLibraryToken'; sceneId: string; x: number; y: number; libraryId: string }
+  | { type: 'deleteLibraryToken'; libraryId: string }
   | {
       type: 'updateToken'
       tokenId: string

@@ -23,6 +23,13 @@ export function TokenInspector(props: Props): React.JSX.Element {
       <header>
         <h2>Token</h2>
         <p>{token.visibleToPlayers ? 'Players can see this token.' : 'Hidden from the player view.'}</p>
+        <p className="hint">
+          {token.temporary
+            ? 'Temporary token. It is not in the library.'
+            : token.libraryId
+              ? 'Saved in the token library.'
+              : 'On this map only.'}
+        </p>
       </header>
       <label>
         Name

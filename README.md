@@ -1,6 +1,6 @@
 # Kartographer
 
-Kartographer is a virtual tabletop for in-person D&D. You run the game from the GM window, and a second window shows players only what they are allowed to see: the current scene, the shared camera, revealed fog, visible tokens, and pointer pings.
+Kartographer is an open source virtual tabletop for in-person TTRPG play. You run the game from the GM window, and a second window shows players only what they are allowed to see: the current scene, the shared camera, revealed fog, visible tokens, and pointer pings.
 
 The same project runs on macOS and Windows. A MacBook plus an external display is the usual game-night setup. The GM window stays on the laptop. The player window fills the TV without opening a second macOS fullscreen Space.
 

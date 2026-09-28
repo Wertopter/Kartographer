@@ -18,8 +18,31 @@ export function GridPanel(props: Props): React.JSX.Element {
     <form className="floating-panel grid-panel" onSubmit={(event) => event.preventDefault()}>
       <header>
         <h2>Grid</h2>
-        <p>Drag the map to slide the grid. Changing size or offset clears revealed fog.</p>
+        <p>Drag the map to slide the grid. Changing size or offset clears revealed fog. Changing the shape does not.</p>
       </header>
+      <div className="token-modes">
+        <button
+          type="button"
+          aria-pressed={props.grid.shape === 'square'}
+          onClick={() => props.onChange({ ...props.grid, shape: 'square' })}
+        >
+          Square
+        </button>
+        <button
+          type="button"
+          aria-pressed={props.grid.shape === 'flat'}
+          onClick={() => props.onChange({ ...props.grid, shape: 'flat' })}
+        >
+          Vertical hex, flat top
+        </button>
+        <button
+          type="button"
+          aria-pressed={props.grid.shape === 'pointy'}
+          onClick={() => props.onChange({ ...props.grid, shape: 'pointy' })}
+        >
+          Horizontal hex, pointed top
+        </button>
+      </div>
       <label className="check">
         <input
           type="checkbox"
@@ -29,7 +52,7 @@ export function GridPanel(props: Props): React.JSX.Element {
         Show grid to everyone
       </label>
       <NumberField
-        label="Cell size"
+        label={props.grid.shape === 'square' ? 'Cell size' : 'Hex width'}
         value={props.grid.cellSize}
         min={minCell}
         max={Math.max(minCell, props.imageWidth)}
@@ -60,7 +83,7 @@ export function GridPanel(props: Props): React.JSX.Element {
           Slide grid
         </button>
         <button type="button" aria-pressed={props.calibrate === 'cell'} onClick={() => props.onCalibrate('cell')}>
-          Drag one cell
+          {props.grid.shape === 'square' ? 'Drag one cell' : 'Drag one hex width'}
         </button>
       </div>
       <p className="hint">

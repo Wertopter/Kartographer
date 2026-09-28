@@ -96,6 +96,13 @@ function normalizeCampaign(campaign: Campaign): Campaign {
       libraryId: typeof token.libraryId === 'string' ? token.libraryId : null,
       temporary: token.temporary === true
     })),
+    scenes: campaign.scenes.map((scene) => ({
+      ...scene,
+      grid: {
+        ...scene.grid,
+        shape: scene.grid?.shape === 'flat' || scene.grid?.shape === 'pointy' ? scene.grid.shape : 'square'
+      }
+    })),
     soundtrack: normalizeSoundtrack(campaign.soundtrack)
   }
 }

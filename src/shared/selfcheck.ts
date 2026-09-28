@@ -7,6 +7,7 @@ import type { Campaign, GridSettings } from '@shared/types'
 
 const grid: GridSettings = {
   enabled: true,
+  shape: 'square',
   cellSize: 50,
   offsetX: 0,
   offsetY: 0,
@@ -26,6 +27,20 @@ const snapped = snapToCell(10, 12, grid, true)
 assert.equal(snapped.x, 25)
 assert.equal(snapped.y, 25)
 assert.deepEqual(snapToCell(10, 12, grid, false), { x: 10, y: 12 })
+
+const pointy: GridSettings = { ...grid, shape: 'pointy', cellSize: 70, offsetX: 0, offsetY: 0 }
+const pointyNear = cellAt(10, 30, 400, 400, pointy)
+const pointyEast = cellAt(70, 30, 400, 400, pointy)
+assert.notEqual(pointyNear, null)
+assert.notEqual(pointyEast, null)
+assert.notEqual(pointyNear, pointyEast)
+const pointyCenter = snapToCell(70, 30, pointy, true)
+assert.ok(Math.abs(pointyCenter.x - 70) < 0.01)
+assert.ok(Math.abs(pointyCenter.y) < 0.01)
+
+const flat: GridSettings = { ...grid, shape: 'flat', cellSize: 80, offsetX: 40, offsetY: 40 }
+assert.deepEqual(snapToCell(40, 40, flat, true), { x: 40, y: 40 })
+assert.notEqual(cellAt(40, 40, 400, 400, flat), cellAt(120, 40, 400, 400, flat))
 
 assert.deepEqual(applyFogPaint({ mode: 'covered' }, 4, [0, 1], 'reveal'), {
   mode: 'partial',

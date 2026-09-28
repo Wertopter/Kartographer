@@ -1,4 +1,4 @@
-import { cellRect, gridMetrics, worldToScreen, type Letterbox } from '@shared/geometry'
+import { cellOutline, eachHexInRect, gridMetrics, gridShape, hexCenter, hexCorners, worldToScreen, type Letterbox } from '@shared/geometry'
 import type { Camera, Fog, GridSettings, PointerPing } from '@shared/types'
 import { POINTER_MS } from '@shared/types'
 
@@ -133,11 +133,13 @@ function paintCells(
   if (!metrics) return
   for (const cell of cells) {
     if (cell < 0 || cell >= metrics.count) continue
-    const rect = cellRect(cell, grid, metrics)
-    let sourceX = rect.x
-    let sourceY = rect.y
-    let sourceW = rect.w
-    let sourceH = rect.h
+    const outline = cellOutline(cell, grid, metrics)
+    const xs = outline.map((point) => point.x)
+    const ys = outline.map((point) => point.y)
+    let sourceX = Math.min(...xs)
+    let sourceY = Math.min(...ys)
+    let sourceW = Math.max(...xs) - sourceX
+    let sourceH = Math.max(...ys) - sourceY
     if (sourceX < 0) {
       sourceW += sourceX
       sourceX = 0
@@ -153,8 +155,28 @@ function paintCells(
     const destW = sourceW * camera.scale
     const destH = sourceH * camera.scale
     if (dest.x + destW < 0 || dest.y + destH < 0 || dest.x > viewWidth || dest.y > viewHeight) continue
+    ctx.save()
+    ctx.beginPath()
+    traceOutline(ctx, outline, camera, viewWidth, viewHeight)
+    ctx.clip()
     ctx.drawImage(image, sourceX, sourceY, sourceW, sourceH, dest.x, dest.y, destW, destH)
+    ctx.restore()
   }
+}
+
+function traceOutline(
+  ctx: CanvasRenderingContext2D,
+  outline: Array<{ x: number; y: number }>,
+  camera: Camera,
+  viewWidth: number,
+  viewHeight: number
+): void {
+  outline.forEach((point, index) => {
+    const screen = worldToScreen(camera, point.x, point.y, viewWidth, viewHeight)
+    if (index === 0) ctx.moveTo(screen.x, screen.y)
+    else ctx.lineTo(screen.x, screen.y)
+  })
+  ctx.closePath()
 }
 
 function drawGrid(
@@ -177,9 +199,7 @@ function drawGrid(
     if (metrics) {
       ctx.beginPath()
       for (const cell of params.fog.cells) {
-        const rect = cellRect(cell, grid, metrics)
-        const dest = worldToScreen(params.camera, rect.x, rect.y, viewWidth, viewHeight)
-        ctx.rect(dest.x, dest.y, rect.w * params.camera.scale, rect.h * params.camera.scale)
+        traceOutline(ctx, cellOutline(cell, grid, metrics), params.camera, viewWidth, viewHeight)
       }
       ctx.clip()
     }
@@ -188,27 +208,37 @@ function drawGrid(
     ctx.restore()
     return
   }
-  const worldLeft = params.camera.x - viewWidth / 2 / params.camera.scale
-  const worldTop = params.camera.y - viewHeight / 2 / params.camera.scale
-  const worldRight = params.camera.x + viewWidth / 2 / params.camera.scale
-  const worldBottom = params.camera.y + viewHeight / 2 / params.camera.scale
-  const firstCol = Math.floor((worldLeft - grid.offsetX) / grid.cellSize) - 1
-  const lastCol = Math.ceil((worldRight - grid.offsetX) / grid.cellSize) + 1
-  const firstRow = Math.floor((worldTop - grid.offsetY) / grid.cellSize) - 1
-  const lastRow = Math.ceil((worldBottom - grid.offsetY) / grid.cellSize) + 1
   ctx.beginPath()
   ctx.strokeStyle = grid.color
   ctx.globalAlpha = 0.55
   ctx.lineWidth = 1
-  for (let col = firstCol; col <= lastCol; col += 1) {
-    const x = worldToScreen(params.camera, grid.offsetX + col * grid.cellSize, 0, viewWidth, viewHeight).x
-    ctx.moveTo(x, origin.y)
-    ctx.lineTo(x, origin.y + drawnHeight)
-  }
-  for (let row = firstRow; row <= lastRow; row += 1) {
-    const y = worldToScreen(params.camera, 0, grid.offsetY + row * grid.cellSize, viewWidth, viewHeight).y
-    ctx.moveTo(origin.x, y)
-    ctx.lineTo(origin.x + drawnWidth, y)
+  if (gridShape(grid) === 'square') {
+    const worldLeft = params.camera.x - viewWidth / 2 / params.camera.scale
+    const worldTop = params.camera.y - viewHeight / 2 / params.camera.scale
+    const worldRight = params.camera.x + viewWidth / 2 / params.camera.scale
+    const worldBottom = params.camera.y + viewHeight / 2 / params.camera.scale
+    const firstCol = Math.floor((worldLeft - grid.offsetX) / grid.cellSize) - 1
+    const lastCol = Math.ceil((worldRight - grid.offsetX) / grid.cellSize) + 1
+    const firstRow = Math.floor((worldTop - grid.offsetY) / grid.cellSize) - 1
+    const lastRow = Math.ceil((worldBottom - grid.offsetY) / grid.cellSize) + 1
+    for (let col = firstCol; col <= lastCol; col += 1) {
+      const x = worldToScreen(params.camera, grid.offsetX + col * grid.cellSize, 0, viewWidth, viewHeight).x
+      ctx.moveTo(x, origin.y)
+      ctx.lineTo(x, origin.y + drawnHeight)
+    }
+    for (let row = firstRow; row <= lastRow; row += 1) {
+      const y = worldToScreen(params.camera, 0, grid.offsetY + row * grid.cellSize, viewWidth, viewHeight).y
+      ctx.moveTo(origin.x, y)
+      ctx.lineTo(origin.x + drawnWidth, y)
+    }
+  } else {
+    const worldLeft = params.camera.x - viewWidth / 2 / params.camera.scale
+    const worldTop = params.camera.y - viewHeight / 2 / params.camera.scale
+    const worldRight = params.camera.x + viewWidth / 2 / params.camera.scale
+    const worldBottom = params.camera.y + viewHeight / 2 / params.camera.scale
+    eachHexInRect(worldLeft, worldTop, worldRight, worldBottom, grid, (q, r) => {
+      traceOutline(ctx, hexCorners(hexCenter(q, r, grid), grid), params.camera, viewWidth, viewHeight)
+    })
   }
   ctx.stroke()
   ctx.restore()

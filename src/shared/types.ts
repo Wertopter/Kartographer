@@ -10,8 +10,13 @@ export type Camera = {
   viewHeight: number
 }
 
+export type GridShape = 'square' | 'flat' | 'pointy'
+
 export type GridSettings = {
   enabled: boolean
+  /** Square, vertical hexes with a flat top, or horizontal hexes with a pointed top. */
+  shape: GridShape
+  /** Square side length, or the width of one hex. */
   cellSize: number
   offsetX: number
   offsetY: number

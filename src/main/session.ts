@@ -418,19 +418,21 @@ export class Session {
     if (!scene || scene.kind !== 'map') return
     if (!finite(grid.cellSize) || !finite(grid.offsetX) || !finite(grid.offsetY)) return
     const minCell = minimumCellSize(scene.width, scene.height)
+    const shape = grid.shape === 'flat' || grid.shape === 'pointy' ? grid.shape : 'square'
     const next: GridSettings = {
       enabled: Boolean(grid.enabled),
+      shape,
       cellSize: clamp(grid.cellSize, minCell, Math.max(minCell, scene.width, scene.height)),
       offsetX: Math.round(grid.offsetX * 100) / 100,
       offsetY: Math.round(grid.offsetY * 100) / 100,
       color: typeof grid.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(grid.color) ? grid.color : scene.grid.color
     }
-    const geometryChanged =
+    const alignmentChanged =
       next.cellSize !== scene.grid.cellSize ||
       next.offsetX !== scene.grid.offsetX ||
       next.offsetY !== scene.grid.offsetY
     scene.grid = next
-    if (geometryChanged && !fogIsClear(scene.fog)) {
+    if (alignmentChanged && !fogIsClear(scene.fog)) {
       scene.fog = { mode: 'covered' }
       this.status = 'Grid alignment changed, so revealed fog was cleared.'
     }

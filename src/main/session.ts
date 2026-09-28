@@ -26,6 +26,7 @@ import type {
   Token
 } from '@shared/types'
 import { TOKEN_COLORS } from '@shared/types'
+import { normalizeSoundtrack } from '@shared/soundtrack'
 import { assetUrl, toPlayerProjection } from '@shared/projection'
 import {
   campaignPaths,
@@ -174,6 +175,7 @@ export class Session {
             imageUrl: token.imageFile ? assetUrl(token.imageFile) : null
           }))
         : [],
+      soundtrack: normalizeSoundtrack(open ? this.campaign.soundtrack : undefined),
       pointer: open ? this.pointer : null,
       displays: this.displays,
       playerWindowOpen: this.playerWindowOpen,
@@ -254,6 +256,9 @@ export class Session {
         break
       case 'pointer':
         this.ping(command.sceneId, command.x, command.y)
+        break
+      case 'updateSoundtrack':
+        this.updateSoundtrack(command.channels)
         break
       default: {
         const unreachable: never = command
@@ -340,6 +345,11 @@ export class Session {
     this.stagedImages.delete(file)
     if (!this.paths || this.isAssetUsed(file)) return
     await rm(join(this.paths.assets, file), { force: true })
+  }
+
+  private updateSoundtrack(channels: Campaign['soundtrack']): void {
+    this.campaign.soundtrack = normalizeSoundtrack(channels)
+    this.emit(true)
   }
 
   private renameCampaign(name: string): void {

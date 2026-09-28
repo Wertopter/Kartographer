@@ -60,6 +60,14 @@ export type LibraryToken = {
   visibleToPlayers: boolean
 }
 
+export type SoundtrackChannel = {
+  id: string
+  /** GM label for what this channel is used for, such as tavern ambience or combat. */
+  title: string
+  url: string
+  volume: number
+}
+
 export type Campaign = {
   version: 1
   name: string
@@ -67,6 +75,7 @@ export type Campaign = {
   scenes: Scene[]
   tokens: Token[]
   library: LibraryToken[]
+  soundtrack: SoundtrackChannel[]
 }
 
 export type PointerPing = {
@@ -134,6 +143,7 @@ export type GmState = {
   scenes: GmScene[]
   tokens: GmToken[]
   library: GmLibraryToken[]
+  soundtrack: SoundtrackChannel[]
   pointer: PointerPing | null
   displays: DisplayInfo[]
   playerWindowOpen: boolean
@@ -177,6 +187,7 @@ export type Command =
   | { type: 'deleteToken'; tokenId: string }
   | { type: 'clearTokenImage'; tokenId: string }
   | { type: 'pointer'; sceneId: string; x: number; y: number }
+  | { type: 'updateSoundtrack'; channels: SoundtrackChannel[] }
 
 export const TOKEN_COLORS = [
   '#d4764e',

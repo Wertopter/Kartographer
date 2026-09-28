@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { applyFogPaint } from '@shared/fog'
 import { cellAt, gridMetrics, presentView, snapToCell } from '@shared/geometry'
 import { toPlayerProjection } from '@shared/projection'
+import { normalizeSoundtrack, parseSoundtrackUrl } from '@shared/soundtrack'
 import type { Campaign, GridSettings } from '@shared/types'
 
 const grid: GridSettings = {
@@ -100,7 +101,8 @@ const campaign: Campaign = {
       temporary: true
     }
   ],
-  library: []
+  library: [],
+  soundtrack: normalizeSoundtrack(undefined)
 }
 
 const projection = toPlayerProjection(
@@ -135,5 +137,32 @@ assert.equal(framed.camera.scale, 1)
 assert.equal(framed.letterbox.width, 200)
 assert.equal(framed.letterbox.x, 100)
 assert.equal(framed.letterbox.y, 0)
+
+assert.equal(normalizeSoundtrack(undefined).length, 8)
+const grown = normalizeSoundtrack([
+  { url: '  https://youtu.be/dQw4w9WgXcQ  ', volume: 140, title: '  Tavern ambience  ' }
+])
+assert.equal(grown[0]?.volume, 100)
+assert.equal(grown[0]?.title, 'Tavern ambience')
+assert.equal(grown[0]?.url, 'https://youtu.be/dQw4w9WgXcQ')
+assert.equal(grown[7]?.url, '')
+assert.equal(grown[7]?.title, '')
+assert.equal(normalizeSoundtrack([{ url: 'https://youtu.be/dQw4w9WgXcQ', volume: Number.NaN }])[0]?.volume, 80)
+assert.equal(normalizeSoundtrack([{ title: 'x'.repeat(80) }])[0]?.title.length, 60)
+assert.deepEqual(parseSoundtrackUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=abc'), {
+  videoId: 'dQw4w9WgXcQ'
+})
+assert.deepEqual(parseSoundtrackUrl('https://youtu.be/dQw4w9WgXcQ'), {
+  videoId: 'dQw4w9WgXcQ'
+})
+assert.deepEqual(parseSoundtrackUrl('https://www.youtube.com/embed/dQw4w9WgXcQ'), {
+  videoId: 'dQw4w9WgXcQ'
+})
+assert.deepEqual(parseSoundtrackUrl('https://music.youtube.com/watch?v=dQw4w9WgXcQ'), {
+  videoId: 'dQw4w9WgXcQ'
+})
+assert.equal(parseSoundtrackUrl(''), null)
+assert.equal(parseSoundtrackUrl('https://vimeo.com/123'), null)
+assert.equal(parseSoundtrackUrl('https://open.spotify.com/track/6rqhFgbbKwnb9MLmUQDhG6'), null)
 
 console.log('selfcheck ok')

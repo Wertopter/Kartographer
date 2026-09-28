@@ -1,5 +1,6 @@
 import { access, mkdir, readFile, rename, writeFile } from 'fs/promises'
 import { basename, dirname, join } from 'path'
+import { normalizeSoundtrack } from '@shared/soundtrack'
 import type { Campaign } from '@shared/types'
 
 export type CampaignPaths = {
@@ -60,7 +61,8 @@ export function createCampaign(): Campaign {
     activeSceneId: null,
     scenes: [],
     tokens: [],
-    library: []
+    library: [],
+    soundtrack: normalizeSoundtrack(undefined)
   }
 }
 
@@ -93,7 +95,8 @@ function normalizeCampaign(campaign: Campaign): Campaign {
       visibleToPlayers: token.visibleToPlayers !== false,
       libraryId: typeof token.libraryId === 'string' ? token.libraryId : null,
       temporary: token.temporary === true
-    }))
+    })),
+    soundtrack: normalizeSoundtrack(campaign.soundtrack)
   }
 }
 

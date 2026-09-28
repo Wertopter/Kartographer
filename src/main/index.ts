@@ -195,6 +195,7 @@ if (!hasLock) {
     protocol.handle('kartographer', (request) => readAsset(session?.assetDirectory ?? '', request.url))
 
     if (app.isPackaged) installContentSecurityPolicy()
+    installYoutubeReferrer()
 
     installMenu()
     gmWindow = createGmWindow()
@@ -292,13 +293,48 @@ if (!hasLock) {
 
 function installContentSecurityPolicy(): void {
   electronSession.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const url = details.url
+    if (!url.startsWith('file:') && !url.startsWith('kartographer:')) {
+      callback({ responseHeaders: details.responseHeaders })
+      return
+    }
     callback({
       responseHeaders: {
         ...details.responseHeaders,
         'Content-Security-Policy': [
-          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' kartographer: data: blob:"
+          [
+            "default-src 'self'",
+            "script-src 'self' https://www.youtube.com https://s.ytimg.com",
+            "style-src 'self' 'unsafe-inline'",
+            "img-src 'self' kartographer: data: blob:",
+            "frame-src https://www.youtube.com https://www.youtube-nocookie.com",
+            "connect-src 'self' https://www.youtube.com"
+          ].join('; ')
         ]
       }
     })
   })
+}
+
+function installYoutubeReferrer(): void {
+  electronSession.defaultSession.webRequest.onBeforeSendHeaders(
+    {
+      urls: [
+        '*://*.youtube.com/*',
+        '*://*.youtube-nocookie.com/*',
+        '*://*.googlevideo.com/*',
+        '*://*.ytimg.com/*'
+      ]
+    },
+    (details, callback) => {
+      const headers = { ...details.requestHeaders }
+      const refererKey = Object.keys(headers).find((key) => key.toLowerCase() === 'referer')
+      const referer = refererKey ? headers[refererKey] : ''
+      if (!referer || referer.startsWith('file:')) {
+        if (refererKey) delete headers[refererKey]
+        headers.Referer = 'https://www.youtube.com/'
+      }
+      callback({ requestHeaders: headers })
+    }
+  )
 }

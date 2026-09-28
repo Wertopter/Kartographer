@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { Camera, GmState, GmToken, GridSettings } from '@shared/types'
+import type { Camera, GmState, GmToken, GridSettings, SoundtrackChannel } from '@shared/types'
 import { TOKEN_COLORS } from '@shared/types'
 import { CampaignList } from '@renderer/gm/CampaignList'
 import { GridPanel } from '@renderer/gm/GridPanel'
 import { SceneList } from '@renderer/gm/SceneList'
 import { TokenInspector } from '@renderer/gm/TokenInspector'
 import { TokenPlacePanel, type TokenPlaceMode } from '@renderer/gm/TokenPlacePanel'
+import { SoundtrackMixer } from '@renderer/gm/SoundtrackMixer'
 import { Toolbar } from '@renderer/gm/Toolbar'
 import { isTypingTarget, type Tool } from '@renderer/tools'
 import { throttle } from '@renderer/throttle'
@@ -40,6 +41,7 @@ export function GmApp(): React.JSX.Element {
   const [tokenVisible, setTokenVisible] = useState(true)
   const [tokenImage, setTokenImage] = useState<string | null>(null)
   const [libraryPick, setLibraryPick] = useState<string | null>(null)
+  const [gmTab, setGmTab] = useState<'map' | 'soundtrack'>('map')
 
   const scene = state?.scenes.find((item) => item.id === state.activeSceneId) ?? null
   const sceneIdRef = useRef<string | null>(null)
@@ -223,18 +225,34 @@ export function GmApp(): React.JSX.Element {
         )}
       </aside>
       <section className="stage">
-        <Toolbar
-          tool={activeTool}
-          mapTools={Boolean(mapTools)}
-          onTool={setTool}
-          onRevealAll={() => {
-            if (scene) void window.kartographer.command({ type: 'revealAll', sceneId: scene.id })
-          }}
-          onCoverAll={() => {
-            if (scene) void window.kartographer.command({ type: 'coverAll', sceneId: scene.id })
-          }}
-        />
+        <div className="stage-tabs" role="tablist" aria-label="GM view">
+          <button type="button" role="tab" aria-selected={gmTab === 'map'} onClick={() => setGmTab('map')}>
+            Map
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={gmTab === 'soundtrack'}
+            onClick={() => setGmTab('soundtrack')}
+          >
+            Soundtrack
+          </button>
+        </div>
+        {gmTab === 'map' ? (
+          <Toolbar
+            tool={activeTool}
+            mapTools={Boolean(mapTools)}
+            onTool={setTool}
+            onRevealAll={() => {
+              if (scene) void window.kartographer.command({ type: 'revealAll', sceneId: scene.id })
+            }}
+            onCoverAll={() => {
+              if (scene) void window.kartographer.command({ type: 'coverAll', sceneId: scene.id })
+            }}
+          />
+        ) : null}
         <div className="stage-body">
+          <div className="map-pane stage-pane" hidden={gmTab !== 'map'}>
           {!state.campaignOpen ? (
             <div className="viewport-empty">
               <p className="wordmark">Choose a campaign</p>
@@ -316,71 +334,84 @@ export function GmApp(): React.JSX.Element {
               </button>
             </div>
           )}
-          {scene && mapTools && activeTool === 'grid' && (
-            <GridPanel
-              grid={scene.grid}
-              imageWidth={scene.width}
-              imageHeight={scene.height}
-              calibrate={calibrate}
-              onCalibrate={setCalibrate}
-              onChange={sendGrid}
-            />
-          )}
-          {scene && mapTools && activeTool === 'token' && (
-            <TokenPlacePanel
-              mode={tokenMode}
-              onMode={setTokenMode}
-              label={tokenLabel}
-              onLabel={setTokenLabel}
-              color={tokenColor}
-              onColor={setTokenColor}
-              visible={tokenVisible}
-              onVisible={setTokenVisible}
-              imageFile={tokenImage}
-              onChooseImage={() => {
-                void window.kartographer.stageTokenImage().then((file) => {
-                  if (!file) return
-                  setTokenImage((current) => {
-                    if (current && current !== file) void window.kartographer.releaseStagedImage(current)
-                    return file
-                  })
-                })
-              }}
-              onClearImage={() => {
-                setTokenImage((current) => {
-                  if (current) void window.kartographer.releaseStagedImage(current)
-                  return null
-                })
-              }}
-              library={state.library}
-              selectedLibraryId={libraryPick}
-              onSelectLibrary={setLibraryPick}
-              onDeleteLibrary={(libraryId) => {
-                if (libraryPick === libraryId) setLibraryPick(null)
-                void window.kartographer.command({ type: 'deleteLibraryToken', libraryId })
-              }}
-            />
-          )}
-          {selected && (
-            <TokenInspector
-              token={selected}
-              onChange={(token) =>
-                void window.kartographer.command({
-                  type: 'updateToken',
-                  tokenId: token.id,
-                  x: token.x,
-                  y: token.y,
-                  size: token.size,
-                  label: token.label,
-                  color: token.color,
-                  visibleToPlayers: token.visibleToPlayers
-                })
-              }
-              onDelete={(tokenId) => void window.kartographer.command({ type: 'deleteToken', tokenId })}
-              onChooseImage={(tokenId) => void window.kartographer.chooseTokenImage(tokenId)}
-              onClearImage={(tokenId) => void window.kartographer.command({ type: 'clearTokenImage', tokenId })}
-            />
-          )}
+          {(scene && mapTools && (activeTool === 'grid' || activeTool === 'token')) || selected ? (
+            <div className="settings-dock">
+              {scene && mapTools && activeTool === 'grid' && (
+                <GridPanel
+                  grid={scene.grid}
+                  imageWidth={scene.width}
+                  imageHeight={scene.height}
+                  calibrate={calibrate}
+                  onCalibrate={setCalibrate}
+                  onChange={sendGrid}
+                />
+              )}
+              {scene && mapTools && activeTool === 'token' && (
+                <TokenPlacePanel
+                  mode={tokenMode}
+                  onMode={setTokenMode}
+                  label={tokenLabel}
+                  onLabel={setTokenLabel}
+                  color={tokenColor}
+                  onColor={setTokenColor}
+                  visible={tokenVisible}
+                  onVisible={setTokenVisible}
+                  imageFile={tokenImage}
+                  onChooseImage={() => {
+                    void window.kartographer.stageTokenImage().then((file) => {
+                      if (!file) return
+                      setTokenImage((current) => {
+                        if (current && current !== file) void window.kartographer.releaseStagedImage(current)
+                        return file
+                      })
+                    })
+                  }}
+                  onClearImage={() => {
+                    setTokenImage((current) => {
+                      if (current) void window.kartographer.releaseStagedImage(current)
+                      return null
+                    })
+                  }}
+                  library={state.library}
+                  selectedLibraryId={libraryPick}
+                  onSelectLibrary={setLibraryPick}
+                  onDeleteLibrary={(libraryId) => {
+                    if (libraryPick === libraryId) setLibraryPick(null)
+                    void window.kartographer.command({ type: 'deleteLibraryToken', libraryId })
+                  }}
+                />
+              )}
+              {selected && (
+                <TokenInspector
+                  token={selected}
+                  onChange={(token) =>
+                    void window.kartographer.command({
+                      type: 'updateToken',
+                      tokenId: token.id,
+                      x: token.x,
+                      y: token.y,
+                      size: token.size,
+                      label: token.label,
+                      color: token.color,
+                      visibleToPlayers: token.visibleToPlayers
+                    })
+                  }
+                  onDelete={(tokenId) => void window.kartographer.command({ type: 'deleteToken', tokenId })}
+                  onChooseImage={(tokenId) => void window.kartographer.chooseTokenImage(tokenId)}
+                  onClearImage={(tokenId) => void window.kartographer.command({ type: 'clearTokenImage', tokenId })}
+                />
+              )}
+            </div>
+          ) : null}
+          </div>
+          <SoundtrackMixer
+            channels={state.soundtrack}
+            disabled={!state.campaignOpen}
+            parked={gmTab !== 'soundtrack'}
+            onChange={(channels: SoundtrackChannel[]) => {
+              void window.kartographer.command({ type: 'updateSoundtrack', channels })
+            }}
+          />
         </div>
       </section>
       <footer className="statusbar">

@@ -17,6 +17,8 @@ import { POINTER_MS } from '@shared/types'
 import { isTypingTarget, type Tool } from '@renderer/tools'
 import { drawMap, type DrawToken } from '@renderer/viewport/draw'
 
+const SCENE_FADE_MS = 650
+
 export type ViewportToken = {
   id: string
   x: number
@@ -84,6 +86,9 @@ export function MapViewport(props: Props): React.JSX.Element {
 
   const [sceneImage, setSceneImage] = useState<HTMLImageElement | null>(null)
   const [tokenImages, setTokenImages] = useState<Map<string, HTMLImageElement>>(new Map())
+  const imageSceneIdRef = useRef<string | null>(null)
+  const seenSceneRef = useRef<string | null | undefined>(undefined)
+  const fadeRef = useRef<{ image: HTMLCanvasElement; started: number } | null>(null)
 
   useEffect(() => {
     const frame = frameRef.current
@@ -112,16 +117,21 @@ export function MapViewport(props: Props): React.JSX.Element {
 
   useEffect(() => {
     if (!props.imageUrl) {
+      imageSceneIdRef.current = props.sceneId
       setSceneImage(null)
       return
     }
+    const sceneId = props.sceneId
     const image = new Image()
-    image.onload = () => setSceneImage(image)
+    image.onload = () => {
+      imageSceneIdRef.current = sceneId
+      setSceneImage(image)
+    }
     image.src = props.imageUrl
     return () => {
       image.onload = null
     }
-  }, [props.imageUrl])
+  }, [props.imageUrl, props.sceneId])
 
   const tokenKey = props.tokens.map((token) => token.imageUrl ?? '').join('|')
   useEffect(() => {
@@ -191,14 +201,36 @@ export function MapViewport(props: Props): React.JSX.Element {
 
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas) return
-    const context = canvas.getContext('2d')
-    if (!context) return
+    const context = canvas?.getContext('2d')
+    if (!canvas || !context) return
+    const sceneId = props.sceneId
+    if (seenSceneRef.current !== undefined && seenSceneRef.current !== sceneId && canvas.width > 0) {
+      const snapshot = document.createElement('canvas')
+      snapshot.width = canvas.width
+      snapshot.height = canvas.height
+      const snapshotContext = snapshot.getContext('2d')
+      if (snapshotContext) {
+        snapshotContext.drawImage(canvas, 0, 0)
+        fadeRef.current = { image: snapshot, started: 0 }
+      }
+    }
+    seenSceneRef.current = sceneId
+
+    const fade = fadeRef.current
+    const imageReady = !props.imageUrl || imageSceneIdRef.current === sceneId
+    if (fade && fade.started === 0 && imageReady) fade.started = performance.now()
+    if (fade && fade.started === 0) {
+      context.setTransform(1, 0, 0, 1, 0, 0)
+      context.clearRect(0, 0, canvas.width, canvas.height)
+      context.drawImage(fade.image, 0, 0)
+      return
+    }
+
     drawMap(context, canvas, {
       cssWidth: size.w,
       cssHeight: size.h,
       dpr: window.devicePixelRatio || 1,
-      image: sceneImage,
+      image: imageSceneIdRef.current === sceneId ? sceneImage : null,
       imageWidth: props.imageWidth,
       imageHeight: props.imageHeight,
       camera: framed,
@@ -212,45 +244,73 @@ export function MapViewport(props: Props): React.JSX.Element {
       measure,
       letterbox: presentation.letterbox
     })
+    if (!fade || fade.started === 0) return
+    const elapsed = performance.now() - fade.started
+    if (elapsed >= SCENE_FADE_MS) {
+      fadeRef.current = null
+      return
+    }
+    context.save()
+    context.setTransform(1, 0, 0, 1, 0, 0)
+    context.globalAlpha = 1 - elapsed / SCENE_FADE_MS
+    context.drawImage(fade.image, 0, 0, canvas.width, canvas.height)
+    context.restore()
   })
 
   useEffect(() => {
-    if (!props.pointer) return
+    const fade = fadeRef.current
+    const fading = fade != null && fade.started > 0 && performance.now() - fade.started < SCENE_FADE_MS
+    const pinging = props.pointer != null && Date.now() - props.pointer.at < POINTER_MS
+    if (!fading && !pinging) return
     let frame = 0
     const tick = (): void => {
       const canvas = canvasRef.current
       const context = canvas?.getContext('2d')
-      if (canvas && context) {
-        const view = presentView(
-          cameraRef.current,
-          size.w,
-          size.h,
-          propsRef.current.role === 'gm' ? 'author' : 'follow'
-        )
+      if (!canvas || !context) return
+      const currentFade = fadeRef.current
+      const imageReady = !props.imageUrl || imageSceneIdRef.current === props.sceneId
+      if (currentFade && currentFade.started === 0 && imageReady) currentFade.started = performance.now()
+      if (!(currentFade && currentFade.started === 0)) {
+        const view = presentView(cameraRef.current, size.w, size.h, props.role === 'gm' ? 'author' : 'follow')
         drawMap(context, canvas, {
           cssWidth: size.w,
           cssHeight: size.h,
           dpr: window.devicePixelRatio || 1,
-          image: sceneImage,
+          image: imageSceneIdRef.current === props.sceneId ? sceneImage : null,
           imageWidth: props.imageWidth,
           imageHeight: props.imageHeight,
           camera: view.camera,
-          grid: propsRef.current.grid,
-          showGrid: propsRef.current.showGrid,
-          fog: propsRef.current.fog,
-          fogStyle: propsRef.current.fogStyle,
+          grid: props.grid,
+          showGrid: props.showGrid,
+          fog: displayFog,
+          fogStyle: props.fogStyle,
           tokens: drawTokens,
-          pointer: propsRef.current.pointer,
+          pointer: props.pointer,
           now: Date.now(),
           measure,
           letterbox: view.letterbox
         })
       }
-      if (props.pointer && Date.now() - props.pointer.at < POINTER_MS) frame = requestAnimationFrame(tick)
+      const overlay = fadeRef.current
+      if (overlay) {
+        const elapsed = overlay.started === 0 ? 0 : performance.now() - overlay.started
+        if (overlay.started > 0 && elapsed >= SCENE_FADE_MS) fadeRef.current = null
+        else {
+          context.save()
+          context.setTransform(1, 0, 0, 1, 0, 0)
+          context.globalAlpha = overlay.started === 0 ? 1 : 1 - elapsed / SCENE_FADE_MS
+          context.drawImage(overlay.image, 0, 0, canvas.width, canvas.height)
+          context.restore()
+        }
+      }
+      const stillFading = fadeRef.current != null && (fadeRef.current.started === 0 || performance.now() - fadeRef.current.started < SCENE_FADE_MS)
+      const ping = propsRef.current.pointer
+      const stillPinging = ping != null && Date.now() - ping.at < POINTER_MS
+      if (stillFading || stillPinging) frame = requestAnimationFrame(tick)
     }
     frame = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(frame)
-  }, [props.pointer, size.w, size.h, sceneImage, measure, drawTokens, props.imageWidth, props.imageHeight])
+  })
 
   useEffect(() => {
     const canvas = canvasRef.current

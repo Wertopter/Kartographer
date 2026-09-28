@@ -6,6 +6,11 @@ export type YoutubePlayer = {
   getCurrentTime: () => number
   getDuration: () => number
   seekTo: (seconds: number, allowSeekAhead: boolean) => void
+  cuePlaylist: (playlist: { listType: 'playlist'; list: string; index?: number }) => void
+  nextVideo: () => void
+  previousVideo: () => void
+  setShuffle: (shuffle: boolean) => void
+  setLoop: (loop: boolean) => void
   getVideoData: () => { title?: string }
   destroy: () => void
 }

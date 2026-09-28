@@ -165,16 +165,36 @@ assert.equal(grown[7]?.title, '')
 assert.equal(normalizeSoundtrack([{ url: 'https://youtu.be/dQw4w9WgXcQ', volume: Number.NaN }])[0]?.volume, 80)
 assert.equal(normalizeSoundtrack([{ title: 'x'.repeat(80) }])[0]?.title.length, 60)
 assert.deepEqual(parseSoundtrackUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=abc'), {
-  videoId: 'dQw4w9WgXcQ'
+  videoId: 'dQw4w9WgXcQ',
+  playlistId: null
+})
+assert.deepEqual(parseSoundtrackUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLabcdefghijklmnop'), {
+  videoId: 'dQw4w9WgXcQ',
+  playlistId: 'PLabcdefghijklmnop'
+})
+assert.deepEqual(parseSoundtrackUrl('https://www.youtube.com/playlist?list=PLabcdefghijklmnop'), {
+  videoId: null,
+  playlistId: 'PLabcdefghijklmnop'
+})
+assert.deepEqual(parseSoundtrackUrl('https://youtu.be/dQw4w9WgXcQ?list=PLabcdefghijklmnop'), {
+  videoId: 'dQw4w9WgXcQ',
+  playlistId: 'PLabcdefghijklmnop'
+})
+assert.deepEqual(parseSoundtrackUrl('https://www.youtube.com/embed/videoseries?list=PLabcdefghijklmnop'), {
+  videoId: null,
+  playlistId: 'PLabcdefghijklmnop'
 })
 assert.deepEqual(parseSoundtrackUrl('https://youtu.be/dQw4w9WgXcQ'), {
-  videoId: 'dQw4w9WgXcQ'
+  videoId: 'dQw4w9WgXcQ',
+  playlistId: null
 })
 assert.deepEqual(parseSoundtrackUrl('https://www.youtube.com/embed/dQw4w9WgXcQ'), {
-  videoId: 'dQw4w9WgXcQ'
+  videoId: 'dQw4w9WgXcQ',
+  playlistId: null
 })
 assert.deepEqual(parseSoundtrackUrl('https://music.youtube.com/watch?v=dQw4w9WgXcQ'), {
-  videoId: 'dQw4w9WgXcQ'
+  videoId: 'dQw4w9WgXcQ',
+  playlistId: null
 })
 assert.equal(parseSoundtrackUrl(''), null)
 assert.equal(parseSoundtrackUrl('https://vimeo.com/123'), null)

@@ -37,7 +37,7 @@ export function SoundtrackMixer(props: Props): React.JSX.Element {
       aria-label="Soundtrack"
     >
       <p className="soundtrack-intro">
-        Paste a YouTube link on each channel. All eight play together, each with its own volume. Name a channel so you remember what it is for.
+        Paste a YouTube video or playlist link on each channel. A video repeats when it ends. A playlist plays through. All eight play together, each with its own volume. Name a channel so you remember what it is for.
       </p>
       {props.disabled ? <p className="empty-copy">Open a campaign folder to keep a soundtrack with the campaign.</p> : null}
       <div className="channel-list">
@@ -81,6 +81,11 @@ function ChannelRow(props: RowProps): React.JSX.Element {
   const ytRef = useRef<YoutubePlayer | null>(null)
   sourceRef.current = source
   const volumeRef = useRef(props.channel.volume)
+  const stopRequested = useRef(false)
+  const [playlistShuffle, setPlaylistShuffle] = useState(false)
+  const [playlistLoop, setPlaylistLoop] = useState(false)
+  const shuffleRef = useRef(false)
+  const loopPlaylistRef = useRef(false)
   volumeRef.current = props.channel.volume
 
   useEffect(() => setDraft(props.channel.url), [props.channel.url])
@@ -102,6 +107,13 @@ function ChannelRow(props: RowProps): React.JSX.Element {
 
     let cancelled = false
     const videoId = source.videoId
+    const playlistId = source.playlistId
+    const loopVideo = Boolean(videoId) && !playlistId
+    stopRequested.current = false
+    shuffleRef.current = false
+    loopPlaylistRef.current = false
+    setPlaylistShuffle(false)
+    setPlaylistLoop(false)
     setPhase('loading')
     setPlayerError('')
     setProgress({ position: 0, duration: 0 })
@@ -119,10 +131,12 @@ function ChannelRow(props: RowProps): React.JSX.Element {
         const player = new YT.Player(mount, {
           width: 128,
           height: 72,
-          videoId,
+          ...(videoId ? { videoId } : {}),
           playerVars: {
             playsinline: 1,
             rel: 0,
+            ...(playlistId ? { list: playlistId, listType: 'playlist' } : {}),
+            ...(loopVideo && videoId ? { loop: 1, playlist: videoId } : {}),
             ...(origin ? { origin } : {})
           },
           events: {
@@ -130,6 +144,21 @@ function ChannelRow(props: RowProps): React.JSX.Element {
               if (cancelled) return
               ytRef.current = event.target
               event.target.setVolume(volumeRef.current)
+              if (playlistId && !videoId) {
+                try {
+                  event.target.cuePlaylist({ listType: 'playlist', list: playlistId, index: 0 })
+                } catch {
+                  // The playlist parameters already cue the first video.
+                }
+              }
+              if (playlistId) {
+                try {
+                  event.target.setShuffle(shuffleRef.current)
+                  event.target.setLoop(loopPlaylistRef.current)
+                } catch {
+                  // Shuffle and loop apply once the playlist is ready.
+                }
+              }
               const nextTitle = event.target.getVideoData()?.title
               if (nextTitle) setTitle(nextTitle)
               setPhase('paused')
@@ -138,6 +167,12 @@ function ChannelRow(props: RowProps): React.JSX.Element {
               if (cancelled) return
               const nextTitle = event.target.getVideoData()?.title
               if (nextTitle) setTitle(nextTitle)
+              if (event.data === YT.PlayerState.ENDED && loopVideo && !stopRequested.current) {
+                event.target.seekTo(0, true)
+                event.target.playVideo()
+                setPhase('playing')
+                return
+              }
               if (event.data === YT.PlayerState.PLAYING) setPhase('playing')
               else if (
                 event.data === YT.PlayerState.PAUSED ||
@@ -207,6 +242,7 @@ function ChannelRow(props: RowProps): React.JSX.Element {
   function togglePlay(): void {
     const player = ytRef.current
     if (!player) return
+    stopRequested.current = false
     if (phase === 'playing') player.pauseVideo()
     else player.playVideo()
   }
@@ -220,14 +256,40 @@ function ChannelRow(props: RowProps): React.JSX.Element {
     }
   }
 
+  function controlPlaylist(action: (player: YoutubePlayer) => void): void {
+    const player = ytRef.current
+    if (!player) return
+    stopRequested.current = false
+    try {
+      action(player)
+    } catch {
+      // Playlist controls apply once the list is ready.
+    }
+  }
+
+  function toggleShuffle(): void {
+    const next = !shuffleRef.current
+    shuffleRef.current = next
+    setPlaylistShuffle(next)
+    controlPlaylist((player) => player.setShuffle(next))
+  }
+
+  function togglePlaylistLoop(): void {
+    const next = !loopPlaylistRef.current
+    loopPlaylistRef.current = next
+    setPlaylistLoop(next)
+    controlPlaylist((player) => player.setLoop(next))
+  }
+
   function stop(): void {
+    stopRequested.current = true
     ytRef.current?.stopVideo()
     setProgress((current) => ({ ...current, position: 0 }))
     if (phase === 'playing') setPhase('paused')
   }
 
   const unrecognized = props.channel.url.trim() !== '' && !source
-  const status = playerError || (unrecognized ? 'Paste a YouTube link.' : title)
+  const status = playerError || (unrecognized ? 'Paste a YouTube video or playlist link.' : title)
   const transportLocked = props.disabled || !source || phase === 'idle' || phase === 'loading' || playerError !== ''
 
   return (
@@ -259,7 +321,7 @@ function ChannelRow(props: RowProps): React.JSX.Element {
           <input
             type="text"
             aria-label={`Channel ${props.index} link`}
-            placeholder="YouTube link"
+            placeholder="YouTube video or playlist link"
             spellCheck={false}
             disabled={props.disabled}
             value={draft}
@@ -284,6 +346,22 @@ function ChannelRow(props: RowProps): React.JSX.Element {
           <button type="button" disabled={transportLocked} onClick={stop}>
             Stop
           </button>
+          {source?.playlistId ? (
+            <>
+              <button type="button" disabled={transportLocked} onClick={() => controlPlaylist((player) => player.previousVideo())}>
+                Back
+              </button>
+              <button type="button" disabled={transportLocked} onClick={() => controlPlaylist((player) => player.nextVideo())}>
+                Skip
+              </button>
+              <button type="button" disabled={transportLocked} aria-pressed={playlistShuffle} onClick={toggleShuffle}>
+                Shuffle
+              </button>
+              <button type="button" disabled={transportLocked} aria-pressed={playlistLoop} onClick={togglePlaylistLoop}>
+                Loop
+              </button>
+            </>
+          ) : null}
           <label className="channel-volume-label">
             Volume
             <input
@@ -343,7 +421,7 @@ function ChannelRow(props: RowProps): React.JSX.Element {
           />
           <span>{formatTime(progress.duration)}</span>
         </label>
-        <div ref={hostRef} className="channel-player" hidden={!source} />
+        <div ref={hostRef} className="channel-player" hidden={!source} aria-hidden="true" />
       </div>
     </article>
   )
@@ -354,7 +432,8 @@ function channelStamp(channels: SoundtrackChannel[]): string {
 }
 
 function sourceKeyOf(source: SoundtrackSource | null): string {
-  return source ? source.videoId : ''
+  if (!source) return ''
+  return `${source.videoId ?? ''}|${source.playlistId ?? ''}`
 }
 
 function formatTime(seconds: number): string {

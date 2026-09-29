@@ -1,4 +1,4 @@
-export type Tool = 'pan' | 'pointer' | 'reveal' | 'hide' | 'token' | 'grid'
+export type Tool = 'pan' | 'pointer' | 'reveal' | 'hide' | 'token' | 'grid' | 'ruler'
 
 export function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false

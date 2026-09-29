@@ -100,6 +100,8 @@ function normalizeCampaign(campaign: Campaign): Campaign {
       ...scene,
       grid: {
         ...scene.grid,
+        color: scene.grid?.color ?? '#f0d7a2',
+        alpha: typeof scene.grid?.alpha === 'number' ? Math.min(1, Math.max(0, scene.grid.alpha)) : 0.55,
         shape: scene.grid?.shape === 'flat' || scene.grid?.shape === 'pointy' ? scene.grid.shape : 'square'
       }
     })),

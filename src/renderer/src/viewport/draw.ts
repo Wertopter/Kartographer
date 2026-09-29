@@ -30,6 +30,7 @@ export type DrawParams = {
   pointer: PointerPing | null
   now: number
   measure: { x1: number; y1: number; x2: number; y2: number } | null
+  ruler: { x1: number; y1: number; x2: number; y2: number; cells: number } | null
   letterbox: Letterbox
 }
 
@@ -74,6 +75,7 @@ export function drawMap(
   for (const token of params.tokens) drawToken(ctx, token, params.camera, viewWidth, viewHeight)
   drawPointer(ctx, params, viewWidth, viewHeight)
   drawMeasure(ctx, params, viewWidth, viewHeight)
+  drawRuler(ctx, params, viewWidth, viewHeight)
   ctx.restore()
 }
 
@@ -210,7 +212,7 @@ function drawGrid(
   }
   ctx.beginPath()
   ctx.strokeStyle = grid.color
-  ctx.globalAlpha = 0.55
+  ctx.globalAlpha = Math.min(1, Math.max(0, grid.alpha))
   ctx.lineWidth = 1
   if (gridShape(grid) === 'square') {
     const worldLeft = params.camera.x - viewWidth / 2 / params.camera.scale
@@ -327,5 +329,45 @@ function drawMeasure(
   ctx.moveTo(start.x, start.y)
   ctx.lineTo(end.x, end.y)
   ctx.stroke()
+  ctx.restore()
+}
+
+function drawRuler(
+  ctx: CanvasRenderingContext2D,
+  params: DrawParams,
+  viewWidth: number,
+  viewHeight: number
+): void {
+  const ruler = params.ruler
+  if (!ruler || params.camera.scale <= 0) return
+  const start = worldToScreen(params.camera, ruler.x1, ruler.y1, viewWidth, viewHeight)
+  const end = worldToScreen(params.camera, ruler.x2, ruler.y2, viewWidth, viewHeight)
+  ctx.save()
+  ctx.strokeStyle = '#f6f1e7'
+  ctx.lineWidth = 2
+  ctx.beginPath()
+  ctx.moveTo(start.x, start.y)
+  ctx.lineTo(end.x, end.y)
+  ctx.stroke()
+  ctx.beginPath()
+  ctx.arc(start.x, start.y, 4, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.beginPath()
+  ctx.arc(end.x, end.y, 4, 0, Math.PI * 2)
+  ctx.fill()
+  const label = `${ruler.cells}`
+  ctx.font = '600 16px "Segoe UI", "Avenir Next", sans-serif'
+  const pad = 8
+  const textWidth = ctx.measureText(label).width
+  const labelX = end.x + 12
+  const labelY = end.y - 14
+  ctx.fillStyle = 'rgba(18, 16, 13, 0.9)'
+  ctx.beginPath()
+  ctx.roundRect(labelX - pad, labelY - 12, textWidth + pad * 2, 24, 6)
+  ctx.fill()
+  ctx.fillStyle = '#f6f1e7'
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(label, labelX, labelY)
   ctx.restore()
 }

@@ -132,7 +132,8 @@ export function GmApp(): React.JSX.Element {
         r: 'reveal',
         h: 'hide',
         t: 'token',
-        g: 'grid'
+        g: 'grid',
+        m: 'ruler'
       }
       const toolKey = next[event.key.toLowerCase()]
       if (!toolKey) return

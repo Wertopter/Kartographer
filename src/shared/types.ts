@@ -21,6 +21,8 @@ export type GridSettings = {
   offsetX: number
   offsetY: number
   color: string
+  /** Line opacity from 0 (invisible) to 1 (solid). */
+  alpha: number
 }
 
 /** Fully covered and fully revealed avoid storing every cell. Partial stores revealed indexes only. */

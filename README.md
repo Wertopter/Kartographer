@@ -33,7 +33,8 @@ Handouts are plain images. Mark a scene as a handout when it should ignore the g
 - **Reveal** (R) and **Hide** (H) paint fog by grid cell. You see the map dimmed under the fog. Players see only revealed cells.
 - **Show map** and **Cover map** reveal or hide every cell.
 - **Token** (T) places a marker. Choose **Create a new token** to save it in this campaign’s token library, **Select from existing tokens** to place one again, or **Temporary token** for a marker that works the same way but is not saved in the library. Drag a token to move it. Tokens snap to the grid while the grid is on. Hide a token from players when a monster has not appeared yet, or give it an image.
-- **Grid** (G) sets a square grid, vertical hexes with a flat top, or horizontal hexes with a pointed top. Cell size for a hex is the width of one hex. Slide the grid to line it up, or drag across one cell to measure it. Changing the size or offset clears revealed fog, because the cells no longer match the map. Changing the shape keeps the map visible.
+- **Ruler** (M) measures how many grid cells lie between a starting cell and another cell. The distance is the nearest whole number. On a hex grid, that count is the number of hexes between them.
+- **Grid** (G) sets a square grid, vertical hexes with a flat top, or horizontal hexes with a pointed top. Cell size for a hex is the width of one hex. Slide the grid to line it up, or drag across one cell to measure it. Changing the offset or the shape keeps the map visible. Changing the cell size clears revealed fog, because the cells no longer match the map.
 
 ## Saved campaigns
 

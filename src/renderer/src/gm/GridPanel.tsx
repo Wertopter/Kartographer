@@ -18,7 +18,7 @@ export function GridPanel(props: Props): React.JSX.Element {
     <form className="floating-panel grid-panel" onSubmit={(event) => event.preventDefault()}>
       <header>
         <h2>Grid</h2>
-        <p>Drag the map to slide the grid. Changing size or offset clears revealed fog. Changing the shape does not.</p>
+        <p>Drag the map to slide the grid. Changing the offset or shape keeps the map visible. Changing the cell size clears revealed fog.</p>
       </header>
       <div className="token-modes">
         <button
@@ -77,6 +77,21 @@ export function GridPanel(props: Props): React.JSX.Element {
           value={props.grid.color}
           onChange={(event) => props.onChange({ ...props.grid, color: event.target.value })}
         />
+      </label>
+      <label>
+        Alpha (A)
+        <span className="alpha-row">
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.01}
+            value={props.grid.alpha}
+            aria-valuetext={`${Math.round(props.grid.alpha * 100)} percent`}
+            onChange={(event) => props.onChange({ ...props.grid, alpha: Number(event.target.value) })}
+          />
+          <span>{Math.round(props.grid.alpha * 100)}%</span>
+        </span>
       </label>
       <div className="tool-group">
         <button type="button" aria-pressed={props.calibrate === 'slide'} onClick={() => props.onCalibrate('slide')}>

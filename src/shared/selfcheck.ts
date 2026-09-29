@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { applyFogPaint } from '@shared/fog'
-import { cellAt, gridMetrics, presentView, snapToCell } from '@shared/geometry'
+import { cellAt, cellDistance, gridMetrics, presentView, snapToCell } from '@shared/geometry'
 import { toPlayerProjection } from '@shared/projection'
 import { normalizeSoundtrack, parseSoundtrackUrl } from '@shared/soundtrack'
 import type { Campaign, GridSettings } from '@shared/types'
@@ -11,7 +11,8 @@ const grid: GridSettings = {
   cellSize: 50,
   offsetX: 0,
   offsetY: 0,
-  color: '#ffffff'
+  color: '#ffffff',
+  alpha: 1
 }
 
 const metrics = gridMetrics(100, 100, grid)
@@ -27,6 +28,10 @@ const snapped = snapToCell(10, 12, grid, true)
 assert.equal(snapped.x, 25)
 assert.equal(snapped.y, 25)
 assert.deepEqual(snapToCell(10, 12, grid, false), { x: 10, y: 12 })
+assert.equal(cellDistance(10, 10, 10, 10, grid), 0)
+assert.equal(cellDistance(10, 10, 60, 10, grid), 1)
+assert.equal(cellDistance(10, 10, 60, 60, grid), 1)
+assert.equal(cellDistance(10, 10, 160, 210, grid), 5)
 
 const pointy: GridSettings = { ...grid, shape: 'pointy', cellSize: 70, offsetX: 0, offsetY: 0 }
 const pointyNear = cellAt(10, 30, 400, 400, pointy)

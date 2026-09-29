@@ -425,16 +425,14 @@ export class Session {
       cellSize: clamp(grid.cellSize, minCell, Math.max(minCell, scene.width, scene.height)),
       offsetX: Math.round(grid.offsetX * 100) / 100,
       offsetY: Math.round(grid.offsetY * 100) / 100,
-      color: typeof grid.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(grid.color) ? grid.color : scene.grid.color
+      color: typeof grid.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(grid.color) ? grid.color : scene.grid.color,
+      alpha: finite(grid.alpha) ? Math.min(1, Math.max(0, grid.alpha)) : scene.grid.alpha
     }
-    const alignmentChanged =
-      next.cellSize !== scene.grid.cellSize ||
-      next.offsetX !== scene.grid.offsetX ||
-      next.offsetY !== scene.grid.offsetY
+    const sizeChanged = next.cellSize !== scene.grid.cellSize
     scene.grid = next
-    if (alignmentChanged && !fogIsClear(scene.fog)) {
+    if (sizeChanged && !fogIsClear(scene.fog)) {
       scene.fog = { mode: 'covered' }
-      this.status = 'Grid alignment changed, so revealed fog was cleared.'
+      this.status = 'Cell size changed, so revealed fog was cleared.'
     }
     const metrics = gridMetrics(scene.width, scene.height, scene.grid)
     if (metrics && metrics.count > 250_000) {

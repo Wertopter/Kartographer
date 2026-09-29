@@ -1,17 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { applyFogPaint } from '@shared/fog'
-import {
-  cellAt,
-  cellsAlong,
-  clampCamera,
-  fitCamera,
-  gridMetrics,
-  panBy,
-  presentView,
-  screenToWorld,
-  snapToCell,
-  zoomAt
-} from '@shared/geometry'
+import { cellAt, cellDistance, cellsAlong, clampCamera, fitCamera, gridMetrics, panBy, presentView, screenToWorld, snapToCell, zoomAt } from '@shared/geometry'
 import type { Camera, Fog, GridSettings, PointerPing } from '@shared/types'
 import { POINTER_MS } from '@shared/types'
 import { isTypingTarget, type Tool } from '@renderer/tools'
@@ -63,6 +52,7 @@ type Drag =
   | { kind: 'fog'; lastX: number; lastY: number }
   | { kind: 'slide'; offsetX: number; offsetY: number; worldX: number; worldY: number }
   | { kind: 'cell'; x1: number; y1: number; x2: number; y2: number }
+  | { kind: 'ruler'; originX: number; originY: number }
   | { kind: 'place'; x: number; y: number; moved: boolean }
 
 export function MapViewport(props: Props): React.JSX.Element {
@@ -74,6 +64,7 @@ export function MapViewport(props: Props): React.JSX.Element {
   const [stroke, setStroke] = useState<{ mode: 'reveal' | 'hide'; cells: number[] } | null>(null)
   const [tokenDrag, setTokenDrag] = useState<{ id: string; x: number; y: number } | null>(null)
   const [measure, setMeasure] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
+  const [ruler, setRuler] = useState<{ x1: number; y1: number; x2: number; y2: number; cells: number } | null>(null)
   const interacting = useRef(false)
   const dragRef = useRef<Drag | null>(null)
   const strokeRef = useRef(stroke)
@@ -242,6 +233,7 @@ export function MapViewport(props: Props): React.JSX.Element {
       pointer: props.pointer,
       now: Date.now(),
       measure,
+      ruler,
       letterbox: presentation.letterbox
     })
     if (!fade || fade.started === 0) return
@@ -288,6 +280,7 @@ export function MapViewport(props: Props): React.JSX.Element {
           pointer: props.pointer,
           now: Date.now(),
           measure,
+          ruler,
           letterbox: view.letterbox
         })
       }
@@ -377,6 +370,23 @@ export function MapViewport(props: Props): React.JSX.Element {
     }
   }, [props.role, size.w, size.h])
 
+  useEffect(() => {
+    if (props.tool !== 'ruler') setRuler(null)
+  }, [props.tool])
+
+  function rulerBetween(fromX: number, fromY: number, toX: number, toY: number) {
+    if (!props.grid) return null
+    const start = snapToCell(fromX, fromY, props.grid, true)
+    const end = snapToCell(toX, toY, props.grid, true)
+    return {
+      x1: start.x,
+      y1: start.y,
+      x2: end.x,
+      y2: end.y,
+      cells: cellDistance(fromX, fromY, toX, toY, props.grid)
+    }
+  }
+
   function worldAt(event: React.PointerEvent<HTMLCanvasElement>): { x: number; y: number; sx: number; sy: number } {
     const rect = event.currentTarget.getBoundingClientRect()
     const sx = event.clientX - rect.left
@@ -450,6 +460,11 @@ export function MapViewport(props: Props): React.JSX.Element {
           worldY: point.y
         }
       }
+      return
+    }
+    if (props.tool === 'ruler' && props.grid) {
+      dragRef.current = { kind: 'ruler', originX: point.x, originY: point.y }
+      setRuler(rulerBetween(point.x, point.y, point.x, point.y))
     }
   }
 
@@ -508,6 +523,10 @@ export function MapViewport(props: Props): React.JSX.Element {
       drag.x2 = point.x
       drag.y2 = point.y
       setMeasure({ x1: drag.x1, y1: drag.y1, x2: point.x, y2: point.y })
+      return
+    }
+    if (drag.kind === 'ruler') {
+      setRuler(rulerBetween(drag.originX, drag.originY, point.x, point.y))
     }
   }
 
@@ -539,7 +558,8 @@ export function MapViewport(props: Props): React.JSX.Element {
     props.onInteractionEnd()
   }
 
-  const cursor = spacePan || props.tool === 'pan' ? 'grab' : props.tool === 'pointer' ? 'crosshair' : props.tool === 'grid' ? 'move' : 'crosshair'
+  const cursor =
+    spacePan || props.tool === 'pan' ? 'grab' : props.tool === 'grid' ? 'move' : 'crosshair'
   const zoom = liveCamera.scale > 0 ? Math.round(liveCamera.scale * 100) : 0
 
   return (

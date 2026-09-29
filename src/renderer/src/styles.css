@@ -390,7 +390,8 @@ button[aria-pressed="true"] kbd { color: var(--accent-ink); }
   font-size: 0.92rem;
 }
 
-.pair label { flex: 1; }
+.alpha-row { display: flex; align-items: center; gap: 0.55rem; color: var(--text); font-size: 0.92rem; }
+.alpha-row input[type='range'] { flex: 1; }
 
 .swatches {
   display: flex;

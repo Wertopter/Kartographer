@@ -17,7 +17,8 @@ export function defaultGrid(): GridSettings {
     cellSize: 70,
     offsetX: 0,
     offsetY: 0,
-    color: '#f0d7a2'
+    color: '#f0d7a2',
+    alpha: 0.55
   }
 }
 
@@ -278,6 +279,35 @@ export function isCellRevealed(fog: Fog, cell: number | null): boolean {
   if (fog.mode === 'revealed') return true
   if (fog.mode === 'covered') return false
   return fog.cells.includes(cell)
+}
+
+export function cellDistance(
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
+  grid: GridSettings
+): number {
+  if (grid.cellSize <= 0) return 0
+  const from =
+    gridShape(grid) === 'square'
+      ? {
+          q: Math.floor((fromX - grid.offsetX) / grid.cellSize),
+          r: Math.floor((fromY - grid.offsetY) / grid.cellSize)
+        }
+      : axialRound(fromX, fromY, grid)
+  const to =
+    gridShape(grid) === 'square'
+      ? {
+          q: Math.floor((toX - grid.offsetX) / grid.cellSize),
+          r: Math.floor((toY - grid.offsetY) / grid.cellSize)
+        }
+      : axialRound(toX, toY, grid)
+  const dq = to.q - from.q
+  const dr = to.r - from.r
+  if (gridShape(grid) === 'square') return Math.round(Math.hypot(dq, dr))
+  const ds = -dq - dr
+  return Math.round((Math.abs(dq) + Math.abs(dr) + Math.abs(ds)) / 2)
 }
 
 export function snapToCell(

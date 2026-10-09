@@ -1,6 +1,6 @@
-import { randomUUID } from 'crypto'
+import { createHash, randomUUID } from 'crypto'
 import { nativeImage } from 'electron'
-import { access, copyFile, mkdir, readdir, rm, stat } from 'fs/promises'
+import { access, copyFile, mkdir, readFile, readdir, rm, stat } from 'fs/promises'
 import { basename, extname, join, resolve } from 'path'
 import { applyFogPaint, fogIsClear } from '@shared/fog'
 import {
@@ -12,6 +12,15 @@ import {
   snapToCell,
   unsetCamera
 } from '@shared/geometry'
+import {
+  assetFileName,
+  buildRemoteProjection,
+  controlledTokenIds,
+  playerMayPing,
+  remoteMoveCommand,
+  type RemoteCommand,
+  type RemoteProjection
+} from '@shared/remote'
 import type {
   Camera,
   Campaign,
@@ -22,12 +31,14 @@ import type {
   PlayerProjection,
   PointerPing,
   RecentCampaign,
+  RemotePeer,
   Scene,
   Token
 } from '@shared/types'
 import { TOKEN_COLORS } from '@shared/types'
 import { normalizeSoundtrack } from '@shared/soundtrack'
 import { assetUrl, toPlayerProjection } from '@shared/projection'
+import { mimeType } from './assets'
 import {
   campaignPaths,
   createCampaign,
@@ -60,6 +71,10 @@ export class Session {
   private readonly libraryPath: string
   private readonly legacyCampaign: string
   private readonly stagedImages = new Set<string>()
+  private remotePeers: RemotePeer[] = []
+  private readonly tokenControllers = new Map<string, string>()
+  private readonly assetHashes = new Map<string, { size: number; mtimeMs: number; hash: string }>()
+  private readonly hashToFile = new Map<string, string>()
 
   constructor(userData: string) {
     this.libraryPath = libraryFile(userData)
@@ -179,13 +194,90 @@ export class Session {
       pointer: open ? this.pointer : null,
       displays: this.displays,
       playerWindowOpen: this.playerWindowOpen,
-      status: this.status
+      status: this.status,
+      remotePeers: this.remotePeers,
+      tokenControl: [...this.tokenControllers.entries()].map(([tokenId, peerId]) => ({ tokenId, peerId }))
     }
   }
 
   getPlayerProjection(): PlayerProjection {
     if (!this.paths) return { scene: null, tokens: [], pointer: null }
     return toPlayerProjection(this.campaign, this.pointer)
+  }
+
+  setRemotePeers(peers: RemotePeer[]): void {
+    const next: RemotePeer[] = []
+    for (const peer of peers.slice(0, 8)) {
+      if (!/^[a-f0-9]{32}$/.test(peer.id)) continue
+      const name = peer.name.trim().slice(0, 24)
+      if (!name) continue
+      next.push({ id: peer.id, name })
+    }
+    this.remotePeers = next
+    const ids = new Set(next.map((peer) => peer.id))
+    for (const [tokenId, peerId] of this.tokenControllers) {
+      if (!ids.has(peerId)) this.tokenControllers.delete(tokenId)
+    }
+    this.emit(false)
+  }
+
+  applyRemoteCommand(peerId: string, command: RemoteCommand): void {
+    if (!this.paths || !/^[a-f0-9]{32}$/.test(peerId)) return
+    const scene = this.campaign.scenes.find((item) => item.id === this.campaign.activeSceneId)
+    if (!scene) return
+    if (command.type === 'pointer') {
+      if (!playerMayPing(scene, command.x, command.y)) return
+      this.ping(scene.id, command.x, command.y)
+      return
+    }
+    const token = this.campaign.tokens.find((item) => item.id === command.tokenId)
+    if (!token || this.tokenControllers.get(token.id) !== peerId) return
+    const visible = this.getPlayerProjection().tokens.some((item) => item.id === token.id)
+    if (!visible) return
+    this.updateToken(remoteMoveCommand(token, command.x, command.y))
+  }
+
+  async getRemoteProjection(peerId: string): Promise<RemoteProjection> {
+    const empty: RemoteProjection = { scene: null, tokens: [], pointer: null, controlledTokenIds: [] }
+    if (!this.paths) return empty
+    const projection = this.getPlayerProjection()
+    const files = new Map<string, string>()
+    const names = new Set<string>()
+    if (projection.scene) {
+      const file = assetFileName(projection.scene.imageUrl)
+      if (file) names.add(file)
+    }
+    for (const token of projection.tokens) {
+      if (!token.imageUrl) continue
+      const file = assetFileName(token.imageUrl)
+      if (file) names.add(file)
+    }
+    for (const file of names) {
+      const hash = await this.hashAsset(file)
+      if (hash) files.set(file, hash)
+    }
+    const controlled = controlledTokenIds(
+      [...this.tokenControllers.entries()].map(([tokenId, id]) => ({ tokenId, peerId: id })),
+      peerId,
+      projection.tokens.map((token) => token.id)
+    )
+    return buildRemoteProjection(projection, files, controlled)
+  }
+
+  async readAssetByHash(hash: string): Promise<{ mime: string; data: Uint8Array } | null> {
+    if (!/^[a-f0-9]{64}$/.test(hash) || !this.paths) return null
+    let file = this.hashToFile.get(hash)
+    if (!file) {
+      await this.getRemoteProjection('')
+      file = this.hashToFile.get(hash)
+    }
+    if (!file) return null
+    try {
+      const data = await readFile(join(this.paths.assets, file))
+      return { mime: mimeType(file), data }
+    } catch {
+      return null
+    }
   }
 
   setDisplays(displays: DisplayInfo[]): void {
@@ -256,6 +348,9 @@ export class Session {
         break
       case 'pointer':
         this.ping(command.sceneId, command.x, command.y)
+        break
+      case 'assignToken':
+        this.assignToken(command.tokenId, command.peerId)
         break
       case 'updateSoundtrack':
         this.updateSoundtrack(command.channels)
@@ -371,6 +466,9 @@ export class Session {
   private deleteScene(sceneId: string): void {
     const scene = this.findScene(sceneId)
     if (!scene) return
+    for (const token of this.campaign.tokens) {
+      if (token.sceneId === sceneId) this.tokenControllers.delete(token.id)
+    }
     this.campaign.scenes = this.campaign.scenes.filter((item) => item.id !== sceneId)
     this.campaign.tokens = this.campaign.tokens.filter((token) => token.sceneId !== sceneId)
     if (this.campaign.activeSceneId === sceneId) {
@@ -613,9 +711,22 @@ export class Session {
     this.emit(true)
   }
 
+  private assignToken(tokenId: string, peerId: string | null): void {
+    if (!this.campaign.tokens.some((token) => token.id === tokenId)) return
+    if (peerId == null || peerId === '') {
+      this.tokenControllers.delete(tokenId)
+      this.emit(false)
+      return
+    }
+    if (!/^[a-f0-9]{32}$/.test(peerId) || !this.remotePeers.some((peer) => peer.id === peerId)) return
+    this.tokenControllers.set(tokenId, peerId)
+    this.emit(false)
+  }
+
   private deleteToken(tokenId: string): void {
     const token = this.campaign.tokens.find((item) => item.id === tokenId)
     if (!token) return
+    this.tokenControllers.delete(tokenId)
     this.campaign.tokens = this.campaign.tokens.filter((item) => item.id !== tokenId)
     void this.sweepAssets()
     this.emit(true)
@@ -633,6 +744,26 @@ export class Session {
     if (!this.findScene(sceneId) || !finite(x) || !finite(y)) return
     this.pointer = { id: randomUUID(), sceneId, x, y, at: Date.now() }
     this.emit(false)
+  }
+
+  private async hashAsset(file: string): Promise<string | null> {
+    if (!this.paths || !/^[\w.-]+$/.test(file)) return null
+    const full = join(this.paths.assets, file)
+    try {
+      const info = await stat(full)
+      const cached = this.assetHashes.get(file)
+      if (cached && cached.size === info.size && cached.mtimeMs === info.mtimeMs) {
+        this.hashToFile.set(cached.hash, file)
+        return cached.hash
+      }
+      const data = await readFile(full)
+      const hash = createHash('sha256').update(data).digest('hex')
+      this.assetHashes.set(file, { size: info.size, mtimeMs: info.mtimeMs, hash })
+      this.hashToFile.set(hash, file)
+      return hash
+    } catch {
+      return null
+    }
   }
 
   private findScene(sceneId: string): Scene | undefined {

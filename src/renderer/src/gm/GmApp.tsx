@@ -6,6 +6,7 @@ import { GridPanel } from '@renderer/gm/GridPanel'
 import { SceneList } from '@renderer/gm/SceneList'
 import { TokenInspector } from '@renderer/gm/TokenInspector'
 import { TokenPlacePanel, type TokenPlaceMode } from '@renderer/gm/TokenPlacePanel'
+import { RemoteShare } from '@renderer/gm/RemoteShare'
 import { SoundtrackMixer } from '@renderer/gm/SoundtrackMixer'
 import { Toolbar } from '@renderer/gm/Toolbar'
 import { isTypingTarget, type Tool } from '@renderer/tools'
@@ -28,7 +29,7 @@ function useGmState(): GmState | null {
   return state
 }
 
-export function GmApp(): React.JSX.Element {
+export function GmApp(props: { onJoin: () => void }): React.JSX.Element {
   const state = useGmState()
   const [tool, setTool] = useState<Tool>('pan')
   const [calibrate, setCalibrate] = useState<'slide' | 'cell'>('slide')
@@ -178,6 +179,9 @@ export function GmApp(): React.JSX.Element {
       <aside className="sidebar">
         <div className="brand">
           <p className="wordmark">Kartographer</p>
+          <button type="button" onClick={props.onJoin}>
+            Join a game
+          </button>
           {state.campaignOpen && (
             <input
               aria-label="Campaign name"
@@ -385,6 +389,8 @@ export function GmApp(): React.JSX.Element {
               {selected && (
                 <TokenInspector
                   token={selected}
+                  peers={state.remotePeers}
+                  controllerId={state.tokenControl.find((item) => item.tokenId === selected.id)?.peerId ?? null}
                   onChange={(token) =>
                     void window.kartographer.command({
                       type: 'updateToken',
@@ -454,6 +460,7 @@ export function GmApp(): React.JSX.Element {
               Close player view
             </button>
           )}
+          <RemoteShare campaignOpen={state.campaignOpen} />
         </div>
         <p className="status-note">
           {selectedDisplay?.primary && multipleDisplays

@@ -2,6 +2,14 @@ import assert from 'node:assert/strict'
 import { applyFogPaint } from '@shared/fog'
 import { cellAt, cellDistance, gridMetrics, presentView, snapToCell } from '@shared/geometry'
 import { toPlayerProjection } from '@shared/projection'
+import {
+  controlledTokenIds,
+  createInviteCode,
+  normalizeInviteCode,
+  parseRemoteCommand,
+  playerMayPing,
+  remoteMoveCommand
+} from '@shared/remote'
 import { normalizeSoundtrack, parseSoundtrackUrl } from '@shared/soundtrack'
 import type { Campaign, GridSettings } from '@shared/types'
 
@@ -204,5 +212,39 @@ assert.deepEqual(parseSoundtrackUrl('https://music.youtube.com/watch?v=dQw4w9WgX
 assert.equal(parseSoundtrackUrl(''), null)
 assert.equal(parseSoundtrackUrl('https://vimeo.com/123'), null)
 assert.equal(parseSoundtrackUrl('https://open.spotify.com/track/6rqhFgbbKwnb9MLmUQDhG6'), null)
+
+const code = createInviteCode(new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]))
+assert.equal(code.split('-').length, 3)
+assert.equal(normalizeInviteCode(code.toUpperCase()), code)
+assert.equal(normalizeInviteCode('not-a-code'), null)
+assert.equal(playerMayPing(campaign.scenes[0], 25, 25), true)
+assert.equal(playerMayPing(campaign.scenes[0], 75, 75), false)
+assert.equal(playerMayPing(handout.scenes[0], 10, 10), true)
+assert.deepEqual(
+  controlledTokenIds(
+    [
+      { tokenId: 'shown', peerId: 'a' },
+      { tokenId: 'hidden', peerId: 'a' }
+    ],
+    'a',
+    ['shown']
+  ),
+  ['shown']
+)
+const move = remoteMoveCommand(campaign.tokens[0], 12, 18)
+assert.equal(move.x, 12)
+assert.equal(move.y, 18)
+assert.equal(move.label, campaign.tokens[0].label)
+assert.equal(move.visibleToPlayers, campaign.tokens[0].visibleToPlayers)
+assert.equal(move.size, campaign.tokens[0].size)
+assert.deepEqual(parseRemoteCommand({ type: 'pointer', x: 1, y: 2 }), { type: 'pointer', x: 1, y: 2 })
+assert.equal(parseRemoteCommand({ type: 'pointer', x: Number.NaN, y: 2 }), null)
+assert.equal(parseRemoteCommand({ type: 'updateCamera', x: 1, y: 2 }), null)
+assert.deepEqual(parseRemoteCommand({ type: 'moveToken', tokenId: 'shown-token', x: 3, y: 4 }), {
+  type: 'moveToken',
+  tokenId: 'shown-token',
+  x: 3,
+  y: 4
+})
 
 console.log('selfcheck ok')

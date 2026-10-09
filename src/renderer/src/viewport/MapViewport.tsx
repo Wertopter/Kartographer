@@ -44,6 +44,9 @@ type Props = {
   onGridOffset: (offsetX: number, offsetY: number) => void
   onCellSize: (cellSize: number) => void
   onInteractionEnd: () => void
+  /** A remote player can ping and drag tokens the GM assigned. */
+  remote?: boolean
+  movableTokenIds?: string[]
 }
 
 type Drag =
@@ -407,8 +410,22 @@ export function MapViewport(props: Props): React.JSX.Element {
   }
 
   function onPointerDown(event: React.PointerEvent<HTMLCanvasElement>): void {
-    if (props.role !== 'gm' || framed.scale <= 0) return
+    if ((props.role !== 'gm' && !props.remote) || framed.scale <= 0) return
     event.currentTarget.setPointerCapture(event.pointerId)
+    if (props.remote) {
+      const point = worldAt(event)
+      const hit = hitToken(point.x, point.y)
+      const movable = props.movableTokenIds ?? []
+      if (hit && movable.includes(hit.id)) {
+        interacting.current = true
+        dragRef.current = { kind: 'token', id: hit.id, moved: false }
+        setTokenDrag({ id: hit.id, x: hit.x, y: hit.y })
+      } else {
+        props.onPointer(point.x, point.y)
+        dragRef.current = null
+      }
+      return
+    }
     const point = worldAt(event)
     interacting.current = true
     const panning = spaceRef.current || props.tool === 'pan'
@@ -470,7 +487,8 @@ export function MapViewport(props: Props): React.JSX.Element {
 
   function onPointerMove(event: React.PointerEvent<HTMLCanvasElement>): void {
     const drag = dragRef.current
-    if (!drag || props.role !== 'gm') return
+    if (!drag || (props.role !== 'gm' && !props.remote)) return
+    if (props.remote && drag.kind !== 'token') return
     const point = worldAt(event)
     if (drag.kind === 'pan') {
       const next = clampCamera(
@@ -567,7 +585,7 @@ export function MapViewport(props: Props): React.JSX.Element {
       <canvas
         ref={canvasRef}
         className="map-canvas"
-        style={{ cursor: props.role === 'gm' ? cursor : 'default' }}
+        style={{ cursor: props.remote ? 'crosshair' : props.role === 'gm' ? cursor : 'default' }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}

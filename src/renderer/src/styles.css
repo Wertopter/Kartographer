@@ -310,6 +310,36 @@ button[aria-pressed="true"] kbd { color: var(--accent-ink); }
 
 .player-wait, .player-root { background: #000; }
 
+.player-root { position: relative; }
+
+.join-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: min(360px, 100%);
+  text-align: left;
+}
+
+.join-card label, .share-code {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.share-code {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  letter-spacing: 0.08em;
+  align-self: center;
+}
+
+.remote-leave {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+}
+
 .zoom-hud {
   position: absolute;
   left: 12px;

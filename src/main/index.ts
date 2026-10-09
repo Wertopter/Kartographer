@@ -1,3 +1,4 @@
+import { join } from 'path'
 import {
   app,
   BrowserWindow,
@@ -9,13 +10,15 @@ import {
   session as electronSession,
   shell
 } from 'electron'
-import type { Command } from '@shared/types'
+import { parseRemoteCommand, signalOrigin } from '@shared/remote'
+import type { Command, RemotePeer } from '@shared/types'
 import { channels } from '@shared/api'
-import { readAsset } from './assets'
+import { readAsset, writeRemoteAsset } from './assets'
 import { Session } from './session'
 import { createGmWindow, createPlayerWindow, externalDisplayId, listDisplays } from './windows'
 
-const hasLock = app.requestSingleInstanceLock()
+const allowSecondInstance = process.env.KARTOGRAPHER_ALLOW_SECOND_INSTANCE === '1'
+const hasLock = allowSecondInstance || app.requestSingleInstanceLock()
 if (!hasLock) {
   app.quit()
 } else {
@@ -192,7 +195,10 @@ if (!hasLock) {
     session.setListener(broadcast)
     await session.init()
 
-    protocol.handle('kartographer', (request) => readAsset(session?.assetDirectory ?? '', request.url))
+    const remoteCacheDir = join(app.getPath('userData'), 'remote-cache')
+    protocol.handle('kartographer', (request) =>
+      readAsset(session?.assetDirectory ?? '', request.url, remoteCacheDir)
+    )
 
     if (app.isPackaged) installContentSecurityPolicy()
     installYoutubeReferrer()
@@ -261,6 +267,32 @@ if (!hasLock) {
       if (!isGm(event.sender.id) || typeof folder !== 'string') return
       return session?.forgetCampaign(folder)
     })
+    ipcMain.handle(channels.setRemotePeers, (event, peers: RemotePeer[]) => {
+      if (!isGm(event.sender.id) || !Array.isArray(peers)) return
+      session?.setRemotePeers(peers)
+    })
+    ipcMain.handle(channels.applyRemoteCommand, (event, peerId: string, command: unknown) => {
+      if (!isGm(event.sender.id) || typeof peerId !== 'string') return
+      const parsed = parseRemoteCommand(command)
+      if (!parsed) return
+      session?.applyRemoteCommand(peerId, parsed)
+    })
+    ipcMain.handle(channels.getRemoteProjection, (event, peerId: string) => {
+      if (!isGm(event.sender.id) || typeof peerId !== 'string') return null
+      return session?.getRemoteProjection(peerId) ?? null
+    })
+    ipcMain.handle(channels.readRemoteAsset, async (event, hash: string) => {
+      if (!isGm(event.sender.id) || typeof hash !== 'string' || !session) return null
+      const asset = await session.readAssetByHash(hash)
+      if (!asset) return null
+      return { mime: asset.mime, data: asset.data }
+    })
+    ipcMain.handle(channels.writeRemoteAsset, (event, hash: string, data: Uint8Array, mime: string) => {
+      if (!isGm(event.sender.id) || typeof hash !== 'string' || typeof mime !== 'string' || !(data instanceof Uint8Array)) {
+        return false
+      }
+      return writeRemoteAsset(remoteCacheDir, hash, data, mime)
+    })
   }).catch((error: unknown) => {
     console.error(error)
     dialog.showErrorBox('Kartographer', 'The campaign could not be opened.')
@@ -308,7 +340,7 @@ function installContentSecurityPolicy(): void {
             "style-src 'self' 'unsafe-inline'",
             "img-src 'self' kartographer: data: blob:",
             "frame-src https://www.youtube.com https://www.youtube-nocookie.com",
-            "connect-src 'self' https://www.youtube.com"
+            `connect-src 'self' https://www.youtube.com ${signalOrigin()} ${signalOrigin().replace(/^https:/, 'wss:').replace(/^http:/, 'ws:')}`
           ].join('; ')
         ]
       }

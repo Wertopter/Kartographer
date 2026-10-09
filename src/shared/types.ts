@@ -141,6 +141,16 @@ export type RecentCampaign = {
   missing: boolean
 }
 
+export type RemotePeer = {
+  id: string
+  name: string
+}
+
+export type TokenControl = {
+  tokenId: string
+  peerId: string
+}
+
 export type GmState = {
   campaignOpen: boolean
   campaignName: string
@@ -155,6 +165,8 @@ export type GmState = {
   displays: DisplayInfo[]
   playerWindowOpen: boolean
   status: string | null
+  remotePeers: RemotePeer[]
+  tokenControl: TokenControl[]
 }
 
 export type Command =
@@ -194,6 +206,7 @@ export type Command =
   | { type: 'deleteToken'; tokenId: string }
   | { type: 'clearTokenImage'; tokenId: string }
   | { type: 'pointer'; sceneId: string; x: number; y: number }
+  | { type: 'assignToken'; tokenId: string; peerId: string | null }
   | { type: 'updateSoundtrack'; channels: SoundtrackChannel[] }
 
 export const TOKEN_COLORS = [

@@ -1,0 +1,15 @@
+name = "kartographer-signal"
+main = "src/index.ts"
+compatibility_date = "2026-04-01"
+
+# Secrets are not stored in this file. From this directory:
+# npx wrangler secret put TURN_KEY_ID
+# npx wrangler secret put TURN_KEY_API_TOKEN
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "Room"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]

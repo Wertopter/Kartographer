@@ -1,4 +1,5 @@
-import type { Command, DisplayInfo, GmState, PlayerProjection } from '@shared/types'
+import type { RemoteCommand, RemoteProjection } from '@shared/remote'
+import type { Command, DisplayInfo, GmState, PlayerProjection, RemotePeer } from '@shared/types'
 
 export const channels = {
   getState: 'kartographer:get-state',
@@ -15,6 +16,11 @@ export const channels = {
   openCampaignFolder: 'kartographer:open-campaign-folder',
   switchCampaign: 'kartographer:switch-campaign',
   forgetCampaign: 'kartographer:forget-campaign',
+  setRemotePeers: 'kartographer:set-remote-peers',
+  applyRemoteCommand: 'kartographer:apply-remote-command',
+  getRemoteProjection: 'kartographer:get-remote-projection',
+  readRemoteAsset: 'kartographer:read-remote-asset',
+  writeRemoteAsset: 'kartographer:write-remote-asset',
   gmState: 'kartographer:gm-state',
   playerState: 'kartographer:player-state'
 } as const
@@ -36,6 +42,11 @@ export type KartographerApi = {
   openCampaignFolder: () => Promise<void>
   switchCampaign: (folder: string) => Promise<void>
   forgetCampaign: (folder: string) => Promise<void>
+  setRemotePeers: (peers: RemotePeer[]) => Promise<void>
+  applyRemoteCommand: (peerId: string, command: RemoteCommand) => Promise<void>
+  getRemoteProjection: (peerId: string) => Promise<RemoteProjection | null>
+  readRemoteAsset: (hash: string) => Promise<{ mime: string; data: Uint8Array } | null>
+  writeRemoteAsset: (hash: string, data: Uint8Array, mime: string) => Promise<boolean>
 }
 
 export type { DisplayInfo }

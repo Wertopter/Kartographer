@@ -60,6 +60,10 @@ npm run dist:win   # on Windows: NSIS installer
 
 An unsigned Mac build opens the first time with a right-click and **Open** (Gatekeeper). A paid Apple Developer certificate is not required.
 
-## Later
+## Remote players
 
-Remote players are not in this version. The player window already receives a projection that omits hidden tokens and unrevealed fog, so a later self-hosted join can reuse that view.
+**Join a game** on another computer connects to a player view the GM is sharing. The GM clicks **Share player view** and reads out the invite code. A joined player sees the shared camera, revealed fog, and visible tokens. They can drop a pointer ping on a revealed cell, and move a token the GM assigns under **Player control**.
+
+Sharing uses a Cloudflare Worker for the introduction and for TURN when a direct connection is blocked. Deploy that Worker from `cloudflare/README.md`, then set `SIGNAL_URL` in `src/shared/remote.ts` to its origin. The campaign itself stays on the GM's computer.
+
+The guest receives the full map image and draws fog on top. Someone with that file can look under the fog. Soundtrack stays on the GM's machine.

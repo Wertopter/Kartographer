@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
-import { TOKEN_COLORS, type GmToken } from '@shared/types'
+import { TOKEN_COLORS, type GmToken, type RemotePeer } from '@shared/types'
 
 type Props = {
   token: GmToken
+  peers: RemotePeer[]
+  controllerId: string | null
   onChange: (token: GmToken) => void
   onDelete: (tokenId: string) => void
   onChooseImage: (tokenId: string) => void
@@ -78,6 +80,33 @@ export function TokenInspector(props: Props): React.JSX.Element {
         />
         Visible to players
       </label>
+      <label>
+        Player control
+        <select
+          value={props.controllerId ?? ''}
+          disabled={props.peers.length === 0}
+          onChange={(event) => {
+            const peerId = event.target.value
+            void window.kartographer.command({
+              type: 'assignToken',
+              tokenId: token.id,
+              peerId: peerId === '' ? null : peerId
+            })
+          }}
+        >
+          <option value="">None</option>
+          {props.peers.map((peer) => (
+            <option key={peer.id} value={peer.id}>
+              {peer.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="hint">
+        {props.peers.length === 0
+          ? 'Share the player view before assigning this token.'
+          : 'That player can move this token while the view is shared.'}
+      </p>
       <div className="tool-group">
         <button type="button" onClick={() => props.onChooseImage(token.id)}>
           Use image

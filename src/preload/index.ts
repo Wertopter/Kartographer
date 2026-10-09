@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import { channels, type KartographerApi } from '@shared/api'
-import type { Command, GmState, PlayerProjection } from '@shared/types'
+import type { RemoteCommand, RemoteProjection } from '@shared/remote'
+import type { Command, GmState, PlayerProjection, RemotePeer } from '@shared/types'
 
 const api: KartographerApi = {
   getState: () => ipcRenderer.invoke(channels.getState) as Promise<GmState>,
@@ -52,7 +53,19 @@ const api: KartographerApi = {
   },
   forgetCampaign: async (folder: string) => {
     await ipcRenderer.invoke(channels.forgetCampaign, folder)
-  }
+  },
+  setRemotePeers: async (peers: RemotePeer[]) => {
+    await ipcRenderer.invoke(channels.setRemotePeers, peers)
+  },
+  applyRemoteCommand: async (peerId: string, command: RemoteCommand) => {
+    await ipcRenderer.invoke(channels.applyRemoteCommand, peerId, command)
+  },
+  getRemoteProjection: (peerId: string) =>
+    ipcRenderer.invoke(channels.getRemoteProjection, peerId) as Promise<RemoteProjection | null>,
+  readRemoteAsset: (hash: string) =>
+    ipcRenderer.invoke(channels.readRemoteAsset, hash) as Promise<{ mime: string; data: Uint8Array } | null>,
+  writeRemoteAsset: (hash: string, data: Uint8Array, mime: string) =>
+    ipcRenderer.invoke(channels.writeRemoteAsset, hash, data, mime) as Promise<boolean>
 }
 
 contextBridge.exposeInMainWorld('kartographer', api)

@@ -20,19 +20,45 @@ function usePlayerState(): PlayerProjection | null {
 
 export function PlayerApp(): React.JSX.Element {
   const state = usePlayerState()
+  return <PlayerStage projection={state} />
+}
+
+export function PlayerStage(props: {
+  projection: PlayerProjection | null
+  waiting?: string
+  remote?: {
+    movableTokenIds: string[]
+    onPointer: (x: number, y: number) => void
+    onMoveToken: (id: string, x: number, y: number) => void
+  }
+  onLeave?: () => void
+}): React.JSX.Element {
+  const state = props.projection
   if (!state?.scene) {
     return (
       <div className="player-wait">
         <p className="wordmark">Kartographer</p>
-        <p>Waiting for the GM.</p>
+        <p>{props.waiting || 'Waiting for the GM.'}</p>
+        {props.onLeave && (
+          <button type="button" onClick={props.onLeave}>
+            Back
+          </button>
+        )}
       </div>
     )
   }
   const scene = state.scene
   return (
     <div className="player-root">
+      {props.onLeave && (
+        <button type="button" className="remote-leave" onClick={props.onLeave}>
+          Leave
+        </button>
+      )}
       <MapViewport
         role="player"
+        remote={props.remote != null}
+        movableTokenIds={props.remote?.movableTokenIds}
         sceneId={scene.id}
         imageUrl={scene.imageUrl}
         imageWidth={scene.width}
@@ -52,9 +78,9 @@ export function PlayerApp(): React.JSX.Element {
         calibrate="slide"
         onCamera={() => undefined}
         onPaint={() => undefined}
-        onPointer={() => undefined}
+        onPointer={(x, y) => props.remote?.onPointer(x, y)}
         onPlaceToken={() => undefined}
-        onMoveToken={() => undefined}
+        onMoveToken={(id, x, y) => props.remote?.onMoveToken(id, x, y)}
         onSelectToken={() => undefined}
         onGridOffset={() => undefined}
         onCellSize={() => undefined}

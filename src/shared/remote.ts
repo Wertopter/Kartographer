@@ -2,7 +2,7 @@ import { cellAt, isCellRevealed } from '@shared/geometry'
 import type { Command, PlayerProjection, PointerPing, Scene, Token } from '@shared/types'
 
 /** Deployed Worker origin, without a trailing slash. Replace this after `wrangler deploy`. */
-export const SIGNAL_URL = 'https://kartographer-signal.example.workers.dev'
+export const SIGNAL_URL = 'https://kartographer-signal.adamlbrower.workers.dev'
 
 const INVITE_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789'
 const ASSET_PREFIX = 'kartographer://assets/'

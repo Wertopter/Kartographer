@@ -348,11 +348,14 @@ function installContentSecurityPolicy(): void {
   })
 }
 
+const YOUTUBE_EMBEDDER = 'https://kartographer.app/'
+
 function installYoutubeReferrer(): void {
   electronSession.defaultSession.webRequest.onBeforeSendHeaders(
     {
       urls: [
         '*://*.youtube.com/*',
+        '*://youtube.com/*',
         '*://*.youtube-nocookie.com/*',
         '*://*.googlevideo.com/*',
         '*://*.ytimg.com/*'
@@ -362,11 +365,21 @@ function installYoutubeReferrer(): void {
       const headers = { ...details.requestHeaders }
       const refererKey = Object.keys(headers).find((key) => key.toLowerCase() === 'referer')
       const referer = refererKey ? headers[refererKey] : ''
-      if (!referer || referer.startsWith('file:')) {
-        if (refererKey) delete headers[refererKey]
-        headers.Referer = 'https://www.youtube.com/'
+      if (youtubeNeedsEmbedder(referer)) {
+        if (refererKey) headers[refererKey] = YOUTUBE_EMBEDDER
+        else headers.Referer = YOUTUBE_EMBEDDER
       }
       callback({ requestHeaders: headers })
     }
   )
+}
+
+function youtubeNeedsEmbedder(referer: string): boolean {
+  if (!referer || referer.startsWith('file:')) return true
+  try {
+    const host = new URL(referer).hostname
+    return host === 'localhost' || host === '127.0.0.1' || host === 'youtube.com' || host === 'www.youtube.com'
+  } catch {
+    return true
+  }
 }

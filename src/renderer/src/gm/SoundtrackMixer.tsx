@@ -136,7 +136,6 @@ function ChannelRow(props: RowProps): React.JSX.Element {
             playsinline: 1,
             rel: 0,
             ...(playlistId ? { list: playlistId, listType: 'playlist' } : {}),
-            ...(loopVideo && videoId ? { loop: 1, playlist: videoId } : {}),
             ...(origin ? { origin } : {})
           },
           events: {

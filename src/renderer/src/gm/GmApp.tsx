@@ -29,7 +29,7 @@ function useGmState(): GmState | null {
   return state
 }
 
-export function GmApp(props: { onJoin: () => void }): React.JSX.Element {
+export function GmApp(props: { onHome: () => void }): React.JSX.Element {
   const state = useGmState()
   const [tool, setTool] = useState<Tool>('pan')
   const [calibrate, setCalibrate] = useState<'slide' | 'cell'>('slide')
@@ -179,8 +179,8 @@ export function GmApp(props: { onJoin: () => void }): React.JSX.Element {
       <aside className="sidebar">
         <div className="brand">
           <p className="wordmark">Kartographer</p>
-          <button type="button" onClick={props.onJoin}>
-            Join a game
+          <button type="button" onClick={props.onHome}>
+            Home
           </button>
           {state.campaignOpen && (
             <input

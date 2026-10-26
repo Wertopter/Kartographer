@@ -113,22 +113,22 @@ export class Session {
     await saveCampaign(this.paths.file, this.campaign)
   }
 
-  async openCampaignFolder(folder: string, asNew: boolean): Promise<void> {
+  async openCampaignFolder(folder: string, asNew: boolean): Promise<boolean> {
     const dir = resolve(folder)
     try {
       const info = await stat(dir)
       if (!info.isDirectory()) {
         this.status = 'Choose a folder for the campaign.'
         this.emit(false)
-        return
+        return false
       }
     } catch {
       this.status = 'That folder could not be opened.'
       this.emit(false)
-      return
+      return false
     }
 
-    if (this.paths && samePath(this.paths.dir, dir)) return
+    if (this.paths && samePath(this.paths.dir, dir)) return true
     await this.flush()
     await this.discardStagedImages()
     this.pointer = null
@@ -149,6 +149,7 @@ export class Session {
     await saveLibrary(this.libraryPath, this.recentFolders)
     await this.refreshRecent()
     this.emit(false)
+    return true
   }
 
   async forgetCampaign(folder: string): Promise<void> {

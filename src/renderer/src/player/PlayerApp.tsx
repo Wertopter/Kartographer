@@ -1,6 +1,19 @@
 import { useEffect, useState } from 'react'
 import type { PlayerProjection } from '@shared/types'
+import { isTypingTarget, type RemoteTool } from '@renderer/tools'
 import { MapViewport } from '@renderer/viewport/MapViewport'
+import type { MapSketch } from '@renderer/viewport/draw'
+
+const SKETCH_COLORS = ['#d4764e', '#3f8f6b', '#4f78a8', '#e0a45a', '#f2efe6'] as const
+
+const remoteTools: Array<{ id: RemoteTool; label: string; keyLabel: string }> = [
+  { id: 'pan', label: 'Pan', keyLabel: 'V' },
+  { id: 'pointer', label: 'Pointer', keyLabel: 'P' },
+  { id: 'stroke', label: 'Draw', keyLabel: 'D' },
+  { id: 'circle', label: 'Circle', keyLabel: 'C' },
+  { id: 'line', label: 'Line', keyLabel: 'L' },
+  { id: 'ruler', label: 'Ruler', keyLabel: 'M' }
+]
 
 function usePlayerState(): PlayerProjection | null {
   const [state, setState] = useState<PlayerProjection | null>(null)
@@ -33,6 +46,38 @@ export function PlayerStage(props: {
   }
   onLeave?: () => void
 }): React.JSX.Element {
+  const [tool, setTool] = useState<RemoteTool>('pan')
+  const [sketchColor, setSketchColor] = useState<string>(SKETCH_COLORS[2])
+  const [sketches, setSketches] = useState<MapSketch[]>([])
+  const sceneId = props.projection?.scene?.id ?? null
+  const remote = props.remote != null
+
+  useEffect(() => {
+    setSketches([])
+    setTool('pan')
+  }, [sceneId])
+
+  useEffect(() => {
+    if (!remote) return
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.metaKey || event.ctrlKey || event.altKey || isTypingTarget(event.target)) return
+      const next: Partial<Record<string, RemoteTool>> = {
+        v: 'pan',
+        p: 'pointer',
+        d: 'stroke',
+        c: 'circle',
+        l: 'line',
+        m: 'ruler'
+      }
+      const picked = next[event.key.toLowerCase()]
+      if (!picked) return
+      event.preventDefault()
+      setTool(picked)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [remote])
+
   const state = props.projection
   if (!state?.scene) {
     return (
@@ -50,6 +95,36 @@ export function PlayerStage(props: {
   const scene = state.scene
   return (
     <div className="player-root">
+      {remote && (
+        <div className="remote-tools" role="toolbar" aria-label="Player tools">
+          {remoteTools.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              aria-pressed={tool === item.id}
+              onClick={() => setTool(item.id)}
+            >
+              {item.label}
+              <kbd>{item.keyLabel}</kbd>
+            </button>
+          ))}
+          {(tool === 'stroke' || tool === 'circle' || tool === 'line') &&
+            SKETCH_COLORS.map((color) => (
+              <button
+                key={color}
+                type="button"
+                className={sketchColor === color ? 'swatch selected' : 'swatch'}
+                style={{ background: color }}
+                aria-label={color}
+                aria-pressed={sketchColor === color}
+                onClick={() => setSketchColor(color)}
+              />
+            ))}
+          <button type="button" disabled={sketches.length === 0} onClick={() => setSketches([])}>
+            Clear
+          </button>
+        </div>
+      )}
       {props.onLeave && (
         <button type="button" className="remote-leave" onClick={props.onLeave}>
           Leave
@@ -57,8 +132,11 @@ export function PlayerStage(props: {
       )}
       <MapViewport
         role="player"
-        remote={props.remote != null}
+        remote={remote}
         movableTokenIds={props.remote?.movableTokenIds}
+        sketches={remote ? sketches : undefined}
+        sketchColor={sketchColor}
+        onSketch={(sketch) => setSketches((current) => [...current.slice(-39), sketch])}
         sceneId={scene.id}
         imageUrl={scene.imageUrl}
         imageWidth={scene.width}
@@ -74,7 +152,7 @@ export function PlayerStage(props: {
         }))}
         selectedTokenId={null}
         pointer={state.pointer}
-        tool="pan"
+        tool={remote ? tool : 'pan'}
         calibrate="slide"
         onCamera={() => undefined}
         onPaint={() => undefined}

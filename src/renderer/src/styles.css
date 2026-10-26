@@ -310,6 +310,38 @@ button[aria-pressed="true"] kbd { color: var(--accent-ink); }
 
 .player-wait, .player-root { background: #000; }
 
+.landing {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+  background:
+    radial-gradient(900px 500px at 50% 30%, #2c261d 0%, #12100d 70%);
+}
+
+.landing-card {
+  width: min(440px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.landing-card > p:not(.wordmark) { color: var(--muted); margin: 0; }
+
+.landing-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.landing-choices button {
+  padding: 0.85rem 1rem;
+  text-align: left;
+  font-size: 1rem;
+}
+
+.landing-campaigns { max-height: 46vh; }
+
 .player-root { position: relative; }
 
 .join-card {
@@ -331,6 +363,29 @@ button[aria-pressed="true"] kbd { color: var(--accent-ink); }
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   letter-spacing: 0.08em;
   align-self: center;
+}
+
+.remote-tools {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  max-width: calc(100% - 120px);
+  padding: 0.35rem;
+  background: rgba(18, 16, 13, 0.88);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.remote-tools .swatch {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 999px;
 }
 
 .remote-leave {

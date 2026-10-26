@@ -3,10 +3,17 @@ import { applyFogPaint } from '@shared/fog'
 import { cellAt, cellDistance, cellsAlong, clampCamera, fitCamera, gridMetrics, panBy, presentView, screenToWorld, snapToCell, zoomAt } from '@shared/geometry'
 import type { Camera, Fog, GridSettings, PointerPing } from '@shared/types'
 import { POINTER_MS } from '@shared/types'
-import { isTypingTarget, type Tool } from '@renderer/tools'
-import { drawMap, type DrawToken } from '@renderer/viewport/draw'
+import { isTypingTarget, type RemoteTool, type Tool } from '@renderer/tools'
+import { drawMap, type DrawToken, type MapSketch } from '@renderer/viewport/draw'
 
 const SCENE_FADE_MS = 650
+
+function sketchWorthKeeping(sketch: MapSketch, scale: number): boolean {
+  const min = 4 / Math.max(scale, 0.02)
+  if (sketch.kind === 'stroke') return sketch.points.length > 1
+  if (sketch.kind === 'circle') return sketch.radius > min
+  return Math.hypot(sketch.x2 - sketch.x1, sketch.y2 - sketch.y1) > min
+}
 
 export type ViewportToken = {
   id: string
@@ -33,8 +40,11 @@ type Props = {
   tokens: ViewportToken[]
   selectedTokenId: string | null
   pointer: PointerPing | null
-  tool: Tool
+  tool: Tool | RemoteTool
   calibrate: 'slide' | 'cell'
+  sketches?: MapSketch[]
+  sketchColor?: string
+  onSketch?: (sketch: MapSketch) => void
   onCamera: (camera: Camera) => void
   onPaint: (cells: number[], mode: 'reveal' | 'hide') => void
   onPointer: (x: number, y: number) => void
@@ -56,6 +66,9 @@ type Drag =
   | { kind: 'slide'; offsetX: number; offsetY: number; worldX: number; worldY: number }
   | { kind: 'cell'; x1: number; y1: number; x2: number; y2: number }
   | { kind: 'ruler'; originX: number; originY: number }
+  | { kind: 'stroke' }
+  | { kind: 'circle'; x: number; y: number }
+  | { kind: 'line'; x: number; y: number }
   | { kind: 'place'; x: number; y: number; moved: boolean }
 
 export function MapViewport(props: Props): React.JSX.Element {
@@ -68,6 +81,10 @@ export function MapViewport(props: Props): React.JSX.Element {
   const [tokenDrag, setTokenDrag] = useState<{ id: string; x: number; y: number } | null>(null)
   const [measure, setMeasure] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
   const [ruler, setRuler] = useState<{ x1: number; y1: number; x2: number; y2: number; cells: number } | null>(null)
+  const [draft, setDraft] = useState<MapSketch | null>(null)
+  const [detached, setDetached] = useState(false)
+  const draftRef = useRef<MapSketch | null>(null)
+  draftRef.current = draft
   const interacting = useRef(false)
   const dragRef = useRef<Drag | null>(null)
   const strokeRef = useRef(stroke)
@@ -97,7 +114,9 @@ export function MapViewport(props: Props): React.JSX.Element {
 
   useEffect(() => {
     interacting.current = false
+    setDetached(false)
     setLiveCamera(props.camera)
+    setDraft(null)
     setStroke(null)
     strokeRef.current = null
     setTokenDrag(null)
@@ -106,8 +125,8 @@ export function MapViewport(props: Props): React.JSX.Element {
   }, [props.sceneId])
 
   useEffect(() => {
-    if (!interacting.current) setLiveCamera(props.camera)
-  }, [props.camera])
+    if (!interacting.current && !detached) setLiveCamera(props.camera)
+  }, [props.camera, detached])
 
   useEffect(() => {
     if (!props.imageUrl) {
@@ -170,7 +189,9 @@ export function MapViewport(props: Props): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [size.w, size.h, props.role])
 
-  const presentation = presentView(liveCamera, size.w, size.h, props.role === 'gm' ? 'author' : 'follow')
+  const viewMode = props.role === 'gm' || props.remote ? 'author' : 'follow'
+  const presentation = presentView(liveCamera, size.w, size.h, viewMode)
+  const visibleSketches = draft ? [...(props.sketches ?? []), draft] : (props.sketches ?? [])
   const framed = presentation.camera
   const metrics = props.grid ? gridMetrics(props.imageWidth, props.imageHeight, props.grid) : null
   const displayFog =
@@ -237,6 +258,7 @@ export function MapViewport(props: Props): React.JSX.Element {
       now: Date.now(),
       measure,
       ruler,
+      sketches: visibleSketches,
       letterbox: presentation.letterbox
     })
     if (!fade || fade.started === 0) return
@@ -266,7 +288,7 @@ export function MapViewport(props: Props): React.JSX.Element {
       const imageReady = !props.imageUrl || imageSceneIdRef.current === props.sceneId
       if (currentFade && currentFade.started === 0 && imageReady) currentFade.started = performance.now()
       if (!(currentFade && currentFade.started === 0)) {
-        const view = presentView(cameraRef.current, size.w, size.h, props.role === 'gm' ? 'author' : 'follow')
+        const view = presentView(cameraRef.current, size.w, size.h, props.role === 'gm' || props.remote ? 'author' : 'follow')
         drawMap(context, canvas, {
           cssWidth: size.w,
           cssHeight: size.h,
@@ -284,6 +306,7 @@ export function MapViewport(props: Props): React.JSX.Element {
           now: Date.now(),
           measure,
           ruler,
+          sketches: visibleSketches,
           letterbox: view.letterbox
         })
       }
@@ -310,7 +333,7 @@ export function MapViewport(props: Props): React.JSX.Element {
 
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas || props.role !== 'gm') return
+    if (!canvas || (props.role !== 'gm' && !props.remote)) return
     const onWheel = (event: WheelEvent): void => {
       event.preventDefault()
       const rect = canvas.getBoundingClientRect()
@@ -331,17 +354,18 @@ export function MapViewport(props: Props): React.JSX.Element {
       interacting.current = true
       cameraRef.current = next
       setLiveCamera(next)
-      propsRef.current.onCamera(next)
+      if (propsRef.current.remote) setDetached(true)
+      else propsRef.current.onCamera(next)
       window.setTimeout(() => {
         interacting.current = false
       }, 180)
     }
     canvas.addEventListener('wheel', onWheel, { passive: false })
     return () => canvas.removeEventListener('wheel', onWheel)
-  }, [props.role])
+  }, [props.role, props.remote])
 
   useEffect(() => {
-    if (props.role !== 'gm') return
+    if (props.role !== 'gm' && !props.remote) return
     const down = (event: KeyboardEvent): void => {
       if (event.code !== 'Space' || isTypingTarget(event.target)) return
       event.preventDefault()
@@ -361,7 +385,8 @@ export function MapViewport(props: Props): React.JSX.Element {
       event.preventDefault()
       const fitted = fitCamera(current.imageWidth, current.imageHeight, size.w, size.h)
       setLiveCamera(fitted)
-      current.onCamera(fitted)
+      if (current.remote) setDetached(true)
+      else current.onCamera(fitted)
     }
     window.addEventListener('keydown', down)
     window.addEventListener('keyup', up)
@@ -371,7 +396,7 @@ export function MapViewport(props: Props): React.JSX.Element {
       window.removeEventListener('keyup', up)
       window.removeEventListener('keydown', fit)
     }
-  }, [props.role, size.w, size.h])
+  }, [props.role, props.remote, size.w, size.h])
 
   useEffect(() => {
     if (props.tool !== 'ruler') setRuler(null)
@@ -409,15 +434,33 @@ export function MapViewport(props: Props): React.JSX.Element {
     return null
   }
 
+  function publishCamera(next: typeof liveCamera): void {
+    cameraRef.current = next
+    setLiveCamera(next)
+    if (props.remote) setDetached(true)
+    else props.onCamera(next)
+  }
+
   function onPointerDown(event: React.PointerEvent<HTMLCanvasElement>): void {
     if ((props.role !== 'gm' && !props.remote) || framed.scale <= 0) return
     event.currentTarget.setPointerCapture(event.pointerId)
-    if (props.remote) {
-      const point = worldAt(event)
-      const hit = hitToken(point.x, point.y)
+    const point = worldAt(event)
+    interacting.current = true
+    const panning = spaceRef.current || props.tool === 'pan'
+    if (panning) {
+      if (!props.remote) {
+        const hit = props.tool === 'pan' ? hitToken(point.x, point.y) : null
+        if (hit && !spaceRef.current) props.onSelectToken(hit.id)
+        else props.onSelectToken(null)
+      }
+      if (props.remote) setDetached(true)
+      dragRef.current = { kind: 'pan', lastX: point.sx, lastY: point.sy }
+      return
+    }
+    if (props.tool === 'pointer') {
+      const hit = props.remote ? hitToken(point.x, point.y) : null
       const movable = props.movableTokenIds ?? []
       if (hit && movable.includes(hit.id)) {
-        interacting.current = true
         dragRef.current = { kind: 'token', id: hit.id, moved: false }
         setTokenDrag({ id: hit.id, x: hit.x, y: hit.y })
       } else {
@@ -426,21 +469,35 @@ export function MapViewport(props: Props): React.JSX.Element {
       }
       return
     }
-    const point = worldAt(event)
-    interacting.current = true
-    const panning = spaceRef.current || props.tool === 'pan'
-    if (panning) {
-      const hit = props.tool === 'pan' ? hitToken(point.x, point.y) : null
-      if (hit && !spaceRef.current) props.onSelectToken(hit.id)
-      else props.onSelectToken(null)
-      dragRef.current = { kind: 'pan', lastX: point.sx, lastY: point.sy }
+    if (props.remote && props.tool === 'stroke') {
+      const sketch: MapSketch = { kind: 'stroke', color: props.sketchColor ?? '#4f78a8', points: [{ x: point.x, y: point.y }] }
+      draftRef.current = sketch
+      setDraft(sketch)
+      dragRef.current = { kind: 'stroke' }
       return
     }
-    if (props.tool === 'pointer') {
-      props.onPointer(point.x, point.y)
-      dragRef.current = null
+    if (props.remote && props.tool === 'circle') {
+      const sketch: MapSketch = { kind: 'circle', color: props.sketchColor ?? '#4f78a8', x: point.x, y: point.y, radius: 0 }
+      draftRef.current = sketch
+      setDraft(sketch)
+      dragRef.current = { kind: 'circle', x: point.x, y: point.y }
       return
     }
+    if (props.remote && props.tool === 'line') {
+      const sketch: MapSketch = {
+        kind: 'line',
+        color: props.sketchColor ?? '#4f78a8',
+        x1: point.x,
+        y1: point.y,
+        x2: point.x,
+        y2: point.y
+      }
+      draftRef.current = sketch
+      setDraft(sketch)
+      dragRef.current = { kind: 'line', x: point.x, y: point.y }
+      return
+    }
+    if (props.remote && props.tool !== 'ruler') return
     if ((props.tool === 'reveal' || props.tool === 'hide') && props.grid) {
       const mode: 'reveal' | 'hide' = props.tool === 'reveal' ? 'reveal' : 'hide'
       const cell = cellAt(point.x, point.y, props.imageWidth, props.imageHeight, props.grid)
@@ -488,7 +545,6 @@ export function MapViewport(props: Props): React.JSX.Element {
   function onPointerMove(event: React.PointerEvent<HTMLCanvasElement>): void {
     const drag = dragRef.current
     if (!drag || (props.role !== 'gm' && !props.remote)) return
-    if (props.remote && drag.kind !== 'token') return
     const point = worldAt(event)
     if (drag.kind === 'pan') {
       const next = clampCamera(
@@ -498,9 +554,45 @@ export function MapViewport(props: Props): React.JSX.Element {
       )
       drag.lastX = point.sx
       drag.lastY = point.sy
-      cameraRef.current = next
-      setLiveCamera(next)
-      props.onCamera(next)
+      publishCamera(next)
+      return
+    }
+    if (drag.kind === 'stroke') {
+      setDraft((current) => {
+        if (!current || current.kind !== 'stroke') return current
+        const last = current.points[current.points.length - 1]
+        const minStep = 4 / Math.max(framed.scale, 0.02)
+        if (last && Math.hypot(point.x - last.x, point.y - last.y) < minStep) return current
+        const points = current.points.length > 500 ? current.points.slice(-499) : current.points
+        const next = { ...current, points: [...points, { x: point.x, y: point.y }] }
+        draftRef.current = next
+        return next
+      })
+      return
+    }
+    if (drag.kind === 'circle') {
+      const next: MapSketch = {
+        kind: 'circle',
+        color: props.sketchColor ?? '#4f78a8',
+        x: drag.x,
+        y: drag.y,
+        radius: Math.hypot(point.x - drag.x, point.y - drag.y)
+      }
+      draftRef.current = next
+      setDraft(next)
+      return
+    }
+    if (drag.kind === 'line') {
+      const next: MapSketch = {
+        kind: 'line',
+        color: props.sketchColor ?? '#4f78a8',
+        x1: drag.x,
+        y1: drag.y,
+        x2: point.x,
+        y2: point.y
+      }
+      draftRef.current = next
+      setDraft(next)
       return
     }
     if (drag.kind === 'fog' && props.grid) {
@@ -573,6 +665,12 @@ export function MapViewport(props: Props): React.JSX.Element {
     }
     if (drag.kind === 'token') setTokenDrag(null)
     if (drag.kind === 'pan') setLiveCamera(cameraRef.current)
+    if (drag.kind === 'stroke' || drag.kind === 'circle' || drag.kind === 'line') {
+      const sketch = draftRef.current
+      if (sketch && sketchWorthKeeping(sketch, framed.scale)) props.onSketch?.(sketch)
+      draftRef.current = null
+      setDraft(null)
+    }
     props.onInteractionEnd()
   }
 
@@ -585,13 +683,13 @@ export function MapViewport(props: Props): React.JSX.Element {
       <canvas
         ref={canvasRef}
         className="map-canvas"
-        style={{ cursor: props.remote ? 'crosshair' : props.role === 'gm' ? cursor : 'default' }}
+        style={{ cursor: props.role === 'gm' || props.remote ? cursor : 'default' }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
       />
-      {props.role === 'gm' && props.imageUrl && (
+      {(props.role === 'gm' || props.remote) && props.imageUrl && (
         <div className="zoom-hud">
           <span>{zoom}%</span>
           <button
@@ -600,11 +698,24 @@ export function MapViewport(props: Props): React.JSX.Element {
               if (size.w < 20 || props.imageWidth < 1) return
               const fitted = fitCamera(props.imageWidth, props.imageHeight, size.w, size.h)
               setLiveCamera(fitted)
-              props.onCamera(fitted)
+              if (props.remote) setDetached(true)
+              else props.onCamera(fitted)
             }}
           >
             Fit
           </button>
+          {props.remote && (
+            <button
+              type="button"
+              aria-pressed={!detached}
+              onClick={() => {
+                setDetached(false)
+                setLiveCamera(props.camera)
+              }}
+            >
+              {detached ? 'Follow GM' : 'Following'}
+            </button>
+          )}
         </div>
       )}
     </div>

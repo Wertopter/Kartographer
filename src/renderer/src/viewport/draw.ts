@@ -31,8 +31,14 @@ export type DrawParams = {
   now: number
   measure: { x1: number; y1: number; x2: number; y2: number } | null
   ruler: { x1: number; y1: number; x2: number; y2: number; cells: number } | null
+  sketches: MapSketch[]
   letterbox: Letterbox
 }
+
+export type MapSketch =
+  | { kind: 'stroke'; color: string; points: Array<{ x: number; y: number }> }
+  | { kind: 'circle'; color: string; x: number; y: number; radius: number }
+  | { kind: 'line'; color: string; x1: number; y1: number; x2: number; y2: number }
 
 export function drawMap(
   ctx: CanvasRenderingContext2D,
@@ -73,6 +79,7 @@ export function drawMap(
     drawGrid(ctx, params, origin, drawnWidth, drawnHeight, viewWidth, viewHeight)
   }
   for (const token of params.tokens) drawToken(ctx, token, params.camera, viewWidth, viewHeight)
+  drawSketches(ctx, params, viewWidth, viewHeight)
   drawPointer(ctx, params, viewWidth, viewHeight)
   drawMeasure(ctx, params, viewWidth, viewHeight)
   drawRuler(ctx, params, viewWidth, viewHeight)
@@ -284,6 +291,61 @@ function drawToken(
   ctx.strokeText(token.label, center.x, labelY)
   ctx.fillStyle = '#f6f1e7'
   ctx.fillText(token.label, center.x, labelY)
+}
+
+function drawSketches(
+  ctx: CanvasRenderingContext2D,
+  params: DrawParams,
+  viewWidth: number,
+  viewHeight: number
+): void {
+  if (params.sketches.length === 0 || params.camera.scale <= 0) return
+  ctx.save()
+  ctx.lineJoin = 'round'
+  ctx.lineCap = 'round'
+  ctx.lineWidth = 3
+  for (const sketch of params.sketches) {
+    ctx.strokeStyle = sketch.color
+    ctx.fillStyle = sketchFill(sketch.color)
+    if (sketch.kind === 'stroke' && sketch.points.length > 1) {
+      const first = worldToScreen(params.camera, sketch.points[0].x, sketch.points[0].y, viewWidth, viewHeight)
+      ctx.beginPath()
+      ctx.moveTo(first.x, first.y)
+      for (const point of sketch.points.slice(1)) {
+        const screen = worldToScreen(params.camera, point.x, point.y, viewWidth, viewHeight)
+        ctx.lineTo(screen.x, screen.y)
+      }
+      ctx.stroke()
+    }
+    if (sketch.kind === 'circle' && sketch.radius > 0) {
+      const center = worldToScreen(params.camera, sketch.x, sketch.y, viewWidth, viewHeight)
+      const edge = worldToScreen(params.camera, sketch.x + sketch.radius, sketch.y, viewWidth, viewHeight)
+      const radius = Math.hypot(edge.x - center.x, edge.y - center.y)
+      ctx.beginPath()
+      ctx.arc(center.x, center.y, radius, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.stroke()
+    }
+    if (sketch.kind === 'line') {
+      const start = worldToScreen(params.camera, sketch.x1, sketch.y1, viewWidth, viewHeight)
+      const end = worldToScreen(params.camera, sketch.x2, sketch.y2, viewWidth, viewHeight)
+      ctx.beginPath()
+      ctx.moveTo(start.x, start.y)
+      ctx.lineTo(end.x, end.y)
+      ctx.stroke()
+    }
+  }
+  ctx.restore()
+}
+
+function sketchFill(color: string): string {
+  const value = color.replace('#', '')
+  if (value.length !== 6) return color
+  const red = Number.parseInt(value.slice(0, 2), 16)
+  const green = Number.parseInt(value.slice(2, 4), 16)
+  const blue = Number.parseInt(value.slice(4, 6), 16)
+  if (Number.isNaN(red) || Number.isNaN(green) || Number.isNaN(blue)) return color
+  return `rgba(${red}, ${green}, ${blue}, 0.22)`
 }
 
 function drawPointer(

@@ -42,15 +42,9 @@ const api: KartographerApi = {
   revealCampaign: async () => {
     await ipcRenderer.invoke(channels.revealCampaign)
   },
-  createCampaignFolder: async () => {
-    await ipcRenderer.invoke(channels.createCampaignFolder)
-  },
-  openCampaignFolder: async () => {
-    await ipcRenderer.invoke(channels.openCampaignFolder)
-  },
-  switchCampaign: async (folder: string) => {
-    await ipcRenderer.invoke(channels.switchCampaign, folder)
-  },
+  createCampaignFolder: () => ipcRenderer.invoke(channels.createCampaignFolder) as Promise<boolean>,
+  openCampaignFolder: () => ipcRenderer.invoke(channels.openCampaignFolder) as Promise<boolean>,
+  switchCampaign: (folder: string) => ipcRenderer.invoke(channels.switchCampaign, folder) as Promise<boolean>,
   forgetCampaign: async (folder: string) => {
     await ipcRenderer.invoke(channels.forgetCampaign, folder)
   },

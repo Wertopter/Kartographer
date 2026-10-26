@@ -105,14 +105,14 @@ if (!hasLock) {
     }
   }
 
-  async function chooseCampaignFolder(asNew: boolean): Promise<void> {
-    if (!session || !gmWindow) return
+  async function chooseCampaignFolder(asNew: boolean): Promise<boolean> {
+    if (!session || !gmWindow) return false
     const result = await dialog.showOpenDialog(gmWindow, {
       title: asNew ? 'Choose a folder for the new campaign' : 'Open a campaign folder',
       properties: asNew ? ['openDirectory', 'createDirectory', 'promptToCreate'] : ['openDirectory']
     })
-    if (result.canceled || result.filePaths.length === 0) return
-    await session.openCampaignFolder(result.filePaths[0], asNew)
+    if (result.canceled || result.filePaths.length === 0) return false
+    return session.openCampaignFolder(result.filePaths[0], asNew)
   }
 
   async function importScenes(): Promise<void> {
@@ -252,16 +252,16 @@ if (!hasLock) {
       if (session.campaignFile) shell.showItemInFolder(session.campaignFile)
     })
     ipcMain.handle(channels.createCampaignFolder, (event) => {
-      if (!isGm(event.sender.id)) return
+      if (!isGm(event.sender.id)) return false
       return chooseCampaignFolder(true)
     })
     ipcMain.handle(channels.openCampaignFolder, (event) => {
-      if (!isGm(event.sender.id)) return
+      if (!isGm(event.sender.id)) return false
       return chooseCampaignFolder(false)
     })
     ipcMain.handle(channels.switchCampaign, (event, folder: string) => {
-      if (!isGm(event.sender.id) || typeof folder !== 'string') return
-      return session?.openCampaignFolder(folder, false)
+      if (!isGm(event.sender.id) || typeof folder !== 'string' || !session) return false
+      return session.openCampaignFolder(folder, false)
     })
     ipcMain.handle(channels.forgetCampaign, (event, folder: string) => {
       if (!isGm(event.sender.id) || typeof folder !== 'string') return

@@ -5,6 +5,7 @@ import type { Camera, Fog, GridSettings, PointerPing } from '@shared/types'
 import { POINTER_MS } from '@shared/types'
 import { isTypingTarget, type RemoteTool, type Tool } from '@renderer/tools'
 import { drawMap, type DrawToken, type MapSketch } from '@renderer/viewport/draw'
+import type { RulerMark } from '@shared/marks'
 
 const SCENE_FADE_MS = 650
 
@@ -43,8 +44,12 @@ type Props = {
   tool: Tool | RemoteTool
   calibrate: 'slide' | 'cell'
   sketches?: MapSketch[]
+  sharedRulers?: Array<RulerMark & { authorName: string }>
   sketchColor?: string
   onSketch?: (sketch: MapSketch) => void
+  onDraft?: (draft: MapSketch | null) => void
+  onRuler?: (ruler: RulerMark | null) => void
+  clearMarks?: number
   onCamera: (camera: Camera) => void
   onPaint: (cells: number[], mode: 'reveal' | 'hide') => void
   onPointer: (x: number, y: number) => void
@@ -258,6 +263,7 @@ export function MapViewport(props: Props): React.JSX.Element {
       now: Date.now(),
       measure,
       ruler,
+      sharedRulers: props.sharedRulers ?? [],
       sketches: visibleSketches,
       letterbox: presentation.letterbox
     })
@@ -306,6 +312,7 @@ export function MapViewport(props: Props): React.JSX.Element {
           now: Date.now(),
           measure,
           ruler,
+          sharedRulers: propsRef.current.sharedRulers ?? [],
           sketches: visibleSketches,
           letterbox: view.letterbox
         })
@@ -399,6 +406,21 @@ export function MapViewport(props: Props): React.JSX.Element {
   }, [props.role, props.remote, size.w, size.h])
 
   useEffect(() => {
+    props.onRuler?.(ruler)
+  }, [ruler])
+
+  useEffect(() => {
+    props.onDraft?.(draft)
+  }, [draft])
+
+  useEffect(() => {
+    if (!props.clearMarks) return
+    setRuler(null)
+    setDraft(null)
+    draftRef.current = null
+  }, [props.clearMarks])
+
+  useEffect(() => {
     if (props.tool !== 'ruler') setRuler(null)
   }, [props.tool])
 
@@ -469,21 +491,21 @@ export function MapViewport(props: Props): React.JSX.Element {
       }
       return
     }
-    if (props.remote && props.tool === 'stroke') {
+    if ((props.role === 'gm' || props.remote) && props.tool === 'stroke') {
       const sketch: MapSketch = { kind: 'stroke', color: props.sketchColor ?? '#4f78a8', points: [{ x: point.x, y: point.y }] }
       draftRef.current = sketch
       setDraft(sketch)
       dragRef.current = { kind: 'stroke' }
       return
     }
-    if (props.remote && props.tool === 'circle') {
+    if ((props.role === 'gm' || props.remote) && props.tool === 'circle') {
       const sketch: MapSketch = { kind: 'circle', color: props.sketchColor ?? '#4f78a8', x: point.x, y: point.y, radius: 0 }
       draftRef.current = sketch
       setDraft(sketch)
       dragRef.current = { kind: 'circle', x: point.x, y: point.y }
       return
     }
-    if (props.remote && props.tool === 'line') {
+    if ((props.role === 'gm' || props.remote) && props.tool === 'line') {
       const sketch: MapSketch = {
         kind: 'line',
         color: props.sketchColor ?? '#4f78a8',

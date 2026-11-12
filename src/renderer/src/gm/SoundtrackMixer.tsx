@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import type { RemoteSoundtrack, RemoteSoundtrackChannel } from '@shared/remote'
 import type { SoundtrackChannel } from '@shared/types'
 import { parseSoundtrackUrl, type SoundtrackSource } from '@shared/soundtrack'
 import { destroyEmbed, loadYoutubeApi, type YoutubePlayer } from '@renderer/gm/soundtrackApi'
@@ -10,6 +11,7 @@ type Props = {
   disabled: boolean
   parked: boolean
   onChange: (channels: SoundtrackChannel[]) => void
+  onPlayback?: (soundtrack: RemoteSoundtrack) => void
 }
 
 export function SoundtrackMixer(props: Props): React.JSX.Element {
@@ -19,6 +21,18 @@ export function SoundtrackMixer(props: Props): React.JSX.Element {
   if (stampRef.current !== stamp) {
     stampRef.current = stamp
     channelsRef.current = props.channels
+  }
+
+  const playback = useRef(new Map<string, RemoteSoundtrackChannel>())
+  const playbackTimer = useRef(0)
+
+  function reportPlayback(channel: RemoteSoundtrackChannel, immediate: boolean): void {
+    playback.current.set(channel.id, channel)
+    window.clearTimeout(playbackTimer.current)
+    playbackTimer.current = window.setTimeout(() => {
+      const channels = props.channels.map((item) => playback.current.get(item.id) ?? silentChannel(item))
+      props.onPlayback?.({ channels })
+    }, immediate ? 0 : 200)
   }
 
   function patch(id: string, partial: Partial<Pick<SoundtrackChannel, 'title' | 'url' | 'volume'>>): void {
@@ -50,6 +64,7 @@ export function SoundtrackMixer(props: Props): React.JSX.Element {
             onTitle={(title) => patch(channel.id, { title })}
             onUrl={(url) => patch(channel.id, { url })}
             onVolume={(volume) => patch(channel.id, { volume })}
+            onLive={(channel, immediate) => reportPlayback(channel, immediate)}
           />
         ))}
       </div>
@@ -64,6 +79,7 @@ type RowProps = {
   onTitle: (title: string) => void
   onUrl: (url: string) => void
   onVolume: (volume: number) => void
+  onLive: (channel: RemoteSoundtrackChannel, immediate: boolean) => void
 }
 
 function ChannelRow(props: RowProps): React.JSX.Element {
@@ -82,6 +98,8 @@ function ChannelRow(props: RowProps): React.JSX.Element {
   sourceRef.current = source
   const volumeRef = useRef(props.channel.volume)
   const stopRequested = useRef(false)
+  const phaseRef = useRef<Phase>('idle')
+  phaseRef.current = phase
   const [playlistShuffle, setPlaylistShuffle] = useState(false)
   const [playlistLoop, setPlaylistLoop] = useState(false)
   const shuffleRef = useRef(false)
@@ -209,7 +227,18 @@ function ChannelRow(props: RowProps): React.JSX.Element {
     } catch {
       // Volume applies once the player is ready.
     }
+    reportLive(false)
   }, [props.channel.volume])
+
+  useEffect(() => {
+    reportLive(true)
+  }, [phase, playlistShuffle, playlistLoop, props.channel.url])
+
+  useEffect(() => {
+    if (phase !== 'playing') return
+    const timer = window.setInterval(() => reportLive(false), 2000)
+    return () => window.clearInterval(timer)
+  }, [phase, sourceKey])
 
   useEffect(() => {
     if (!sourceKey) return
@@ -227,6 +256,33 @@ function ChannelRow(props: RowProps): React.JSX.Element {
     }, 250)
     return () => window.clearInterval(timer)
   }, [sourceKey])
+
+  function reportLive(immediate: boolean): void {
+    let position = 0
+    let playlistIndex: number | null = null
+    try {
+      const current = ytRef.current?.getCurrentTime()
+      if (typeof current === 'number' && Number.isFinite(current)) position = current
+      const index = ytRef.current?.getPlaylistIndex?.()
+      if (typeof index === 'number' && index >= 0) playlistIndex = index
+    } catch {
+      // The player reports time once a video is cued.
+    }
+    props.onLive(
+      {
+        id: props.channel.id,
+        url: props.channel.url,
+        volume: volumeRef.current,
+        playing: phaseRef.current === 'playing' && !stopRequested.current,
+        position: stopRequested.current ? 0 : position,
+        at: Date.now(),
+        playlistIndex,
+        shuffle: shuffleRef.current,
+        loop: loopPlaylistRef.current
+      },
+      immediate
+    )
+  }
 
   function commit(): void {
     const next = draft.trim()
@@ -253,6 +309,7 @@ function ChannelRow(props: RowProps): React.JSX.Element {
     } catch {
       // The player accepts a seek once it has a duration.
     }
+    reportLive(true)
   }
 
   function controlPlaylist(action: (player: YoutubePlayer) => void): void {
@@ -285,6 +342,7 @@ function ChannelRow(props: RowProps): React.JSX.Element {
     ytRef.current?.stopVideo()
     setProgress((current) => ({ ...current, position: 0 }))
     if (phase === 'playing') setPhase('paused')
+    reportLive(true)
   }
 
   const unrecognized = props.channel.url.trim() !== '' && !source
@@ -424,6 +482,20 @@ function ChannelRow(props: RowProps): React.JSX.Element {
       </div>
     </article>
   )
+}
+
+function silentChannel(channel: SoundtrackChannel): RemoteSoundtrackChannel {
+  return {
+    id: channel.id,
+    url: channel.url,
+    volume: channel.volume,
+    playing: false,
+    position: 0,
+    at: Date.now(),
+    playlistIndex: null,
+    shuffle: false,
+    loop: false
+  }
 }
 
 function channelStamp(channels: SoundtrackChannel[]): string {

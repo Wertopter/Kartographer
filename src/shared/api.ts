@@ -1,3 +1,4 @@
+import type { AuthorMarks } from '@shared/marks'
 import type { RemoteCommand, RemoteProjection } from '@shared/remote'
 import type { Command, DisplayInfo, GmState, PlayerProjection, RemotePeer } from '@shared/types'
 
@@ -21,8 +22,11 @@ export const channels = {
   getRemoteProjection: 'kartographer:get-remote-projection',
   readRemoteAsset: 'kartographer:read-remote-asset',
   writeRemoteAsset: 'kartographer:write-remote-asset',
+  publishMarks: 'kartographer:publish-marks',
+  getMarkBoard: 'kartographer:get-mark-board',
   gmState: 'kartographer:gm-state',
-  playerState: 'kartographer:player-state'
+  playerState: 'kartographer:player-state',
+  marks: 'kartographer:marks'
 } as const
 
 export type KartographerApi = {
@@ -47,6 +51,9 @@ export type KartographerApi = {
   getRemoteProjection: (peerId: string) => Promise<RemoteProjection | null>
   readRemoteAsset: (hash: string) => Promise<{ mime: string; data: Uint8Array } | null>
   writeRemoteAsset: (hash: string, data: Uint8Array, mime: string) => Promise<boolean>
+  publishMarks: (board: AuthorMarks[]) => Promise<void>
+  getMarkBoard: () => Promise<AuthorMarks[]>
+  onMarks: (callback: (board: AuthorMarks[]) => void) => () => void
 }
 
 export type { DisplayInfo }

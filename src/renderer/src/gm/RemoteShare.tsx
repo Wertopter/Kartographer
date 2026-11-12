@@ -1,19 +1,40 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type MutableRefObject } from 'react'
+import type { RemoteSoundtrack } from '@shared/remote'
+import type { AuthorMarks } from '@shared/marks'
 import type { RemotePeer } from '@shared/types'
 import { HostRoom } from '@renderer/remote/hostRoom'
 
 type Phase = 'idle' | 'live' | 'error'
 
-export function RemoteShare(props: { campaignOpen: boolean }): React.JSX.Element {
+export function RemoteShare(props: {
+  campaignOpen: boolean
+  playbackRef: MutableRefObject<(soundtrack: RemoteSoundtrack) => void>
+  boardRef: MutableRefObject<(board: AuthorMarks[]) => void>
+  onPeerMarks: (marks: AuthorMarks) => void
+}): React.JSX.Element {
   const [phase, setPhase] = useState<Phase>('idle')
   const [code, setCode] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [peers, setPeers] = useState<RemotePeer[]>([])
   const roomRef = useRef<HostRoom | null>(null)
+  const latestPlayback = useRef<RemoteSoundtrack | null>(null)
+  const latestBoard = useRef<AuthorMarks[] | null>(null)
 
   useEffect(() => {
-    return () => roomRef.current?.stop()
-  }, [])
+    props.playbackRef.current = (soundtrack) => {
+      latestPlayback.current = soundtrack
+      roomRef.current?.sendSoundtrack(soundtrack)
+    }
+    props.boardRef.current = (board) => {
+      latestBoard.current = board
+      roomRef.current?.sendBoard(board)
+    }
+    return () => {
+      props.playbackRef.current = () => undefined
+      props.boardRef.current = () => undefined
+      roomRef.current?.stop()
+    }
+  }, [props.playbackRef, props.boardRef])
 
   useEffect(() => {
     if (phase !== 'live') return
@@ -48,12 +69,15 @@ export function RemoteShare(props: { campaignOpen: boolean }): React.JSX.Element
         setMessage(next)
         setCode(null)
         setPeers([])
-      }
+      },
+      onMarks: props.onPeerMarks
     })
     roomRef.current = room
     setMessage('Opening a share…')
     try {
       await room.start()
+      if (roomRef.current === room && latestPlayback.current) room.sendSoundtrack(latestPlayback.current)
+      if (roomRef.current === room && latestBoard.current) room.sendBoard(latestBoard.current)
     } catch (caught) {
       if (roomRef.current !== room) return
       room.stop()

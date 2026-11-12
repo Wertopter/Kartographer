@@ -7,6 +7,11 @@ files:
   - package.json
 asar: true
 npmRebuild: false
+publish:
+  provider: github
+  owner: Wertopter
+  repo: Kartographer-Installer
+  releaseType: release
 mac:
   category: public.app-category.games
   target:

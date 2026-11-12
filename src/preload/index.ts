@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import { channels, type KartographerApi } from '@shared/api'
+import type { AuthorMarks } from '@shared/marks'
 import type { RemoteCommand, RemoteProjection } from '@shared/remote'
 import type { Command, GmState, PlayerProjection, RemotePeer } from '@shared/types'
 
@@ -59,7 +60,18 @@ const api: KartographerApi = {
   readRemoteAsset: (hash: string) =>
     ipcRenderer.invoke(channels.readRemoteAsset, hash) as Promise<{ mime: string; data: Uint8Array } | null>,
   writeRemoteAsset: (hash: string, data: Uint8Array, mime: string) =>
-    ipcRenderer.invoke(channels.writeRemoteAsset, hash, data, mime) as Promise<boolean>
+    ipcRenderer.invoke(channels.writeRemoteAsset, hash, data, mime) as Promise<boolean>,
+  publishMarks: async (board: AuthorMarks[]) => {
+    await ipcRenderer.invoke(channels.publishMarks, board)
+  },
+  getMarkBoard: () => ipcRenderer.invoke(channels.getMarkBoard) as Promise<AuthorMarks[]>,
+  onMarks: (callback) => {
+    const listener = (_event: IpcRendererEvent, board: AuthorMarks[]) => callback(board)
+    ipcRenderer.on(channels.marks, listener)
+    return () => {
+      ipcRenderer.removeListener(channels.marks, listener)
+    }
+  }
 }
 
 contextBridge.exposeInMainWorld('kartographer', api)

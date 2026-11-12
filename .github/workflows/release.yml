@@ -1,0 +1,41 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Require the tag to match the app version
+        shell: bash
+        run: |
+          version=$(node -p "require('./package.json').version")
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$version" != "$tag" ]; then
+            echo "Tag v$tag does not match package.json version $version."
+            exit 1
+          fi
+
+      - run: npm ci
+
+      - name: Publish the Windows installer
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.INSTALLER_REPO_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "Add the INSTALLER_REPO_TOKEN secret to Wertopter/Kartographer."
+            echo "It needs contents write access to Wertopter/Kartographer-Installer only."
+            exit 1
+          fi
+          npm run release:win

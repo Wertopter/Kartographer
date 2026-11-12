@@ -1,4 +1,5 @@
-import { parseDataMessage, projectionAssets, type SignalPayload } from '@shared/remote'
+import { parseDataMessage, projectionAssets, type RemoteSoundtrack, type SignalPayload } from '@shared/remote'
+import type { AuthorMarks } from '@shared/marks'
 import type { RemotePeer } from '@shared/types'
 import { sendAsset } from '@renderer/remote/bytes'
 import { browserIceServers, createRoom, openRoomSocket, parseServerMessage } from '@renderer/remote/signaling'
@@ -22,6 +23,7 @@ export type HostListener = {
   onPeers: (peers: RemotePeer[]) => void
   onStatus: (message: string | null) => void
   onFailed: (message: string) => void
+  onMarks: (marks: AuthorMarks) => void
 }
 
 function waitForOpen(socket: WebSocket): Promise<void> {
@@ -54,6 +56,8 @@ export class HostRoom {
   private closed = false
   private pushGeneration = 0
   private pushTimer = 0
+  private soundtrack: string | null = null
+  private boardMessage: string | null = null
 
   constructor(private readonly listener: HostListener) {}
 
@@ -74,6 +78,16 @@ export class HostRoom {
     this.peers.clear()
     void window.kartographer.setRemotePeers([])
     this.listener.onPeers([])
+  }
+
+  sendBoard(board: AuthorMarks[]): void {
+    this.boardMessage = JSON.stringify({ type: 'mark-board', board })
+    for (const link of this.peers.values()) this.sendCachedBoard(link)
+  }
+
+  sendSoundtrack(soundtrack: RemoteSoundtrack): void {
+    this.soundtrack = JSON.stringify({ type: 'soundtrack', soundtrack })
+    for (const link of this.peers.values()) this.sendCachedSoundtrack(link)
   }
 
   schedulePush(): void {
@@ -160,6 +174,8 @@ export class HostRoom {
       link.channel = event.channel
       event.channel.onopen = () => {
         window.clearTimeout(link.timer)
+        this.sendCachedSoundtrack(link)
+        this.sendCachedBoard(link)
         this.schedulePush()
       }
       event.channel.onmessage = (message) => {
@@ -168,6 +184,7 @@ export class HostRoom {
         if (!parsed || this.closed) return
         if (parsed.type === 'command') void window.kartographer.applyRemoteCommand(peerId, parsed.command)
         if (parsed.type === 'need') void this.sendAssets(peerId, parsed.hashes)
+        if (parsed.type === 'marks' && parsed.marks.authorId === peerId) this.listener.onMarks(parsed.marks)
       }
     }
     pc.onconnectionstatechange = () => {
@@ -228,6 +245,16 @@ export class HostRoom {
       if (ok) link.sent.add(hash)
       if (this.closed || generation !== this.pushGeneration) return
     }
+  }
+
+  private sendCachedBoard(link: Link): void {
+    if (!this.boardMessage || link.channel?.readyState !== 'open') return
+    link.channel.send(this.boardMessage)
+  }
+
+  private sendCachedSoundtrack(link: Link): void {
+    if (!this.soundtrack || link.channel?.readyState !== 'open') return
+    link.channel.send(this.soundtrack)
   }
 
   private publishPeers(): void {

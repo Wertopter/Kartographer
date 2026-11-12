@@ -1,4 +1,4 @@
-export type Tool = 'pan' | 'pointer' | 'reveal' | 'hide' | 'token' | 'grid' | 'ruler'
+export type Tool = 'pan' | 'pointer' | 'reveal' | 'hide' | 'token' | 'grid' | 'ruler' | 'stroke' | 'circle' | 'line'
 
 /** Tools on a joined computer. They do not change the GM window or the table display. */
 export type RemoteTool = 'pan' | 'pointer' | 'stroke' | 'circle' | 'line' | 'ruler'

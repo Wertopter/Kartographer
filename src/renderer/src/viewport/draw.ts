@@ -1,4 +1,5 @@
 import { cellOutline, eachHexInRect, gridMetrics, gridShape, hexCenter, hexCorners, worldToScreen, type Letterbox } from '@shared/geometry'
+import type { MapSketch, RulerMark } from '@shared/marks'
 import type { Camera, Fog, GridSettings, PointerPing } from '@shared/types'
 import { POINTER_MS } from '@shared/types'
 
@@ -31,14 +32,12 @@ export type DrawParams = {
   now: number
   measure: { x1: number; y1: number; x2: number; y2: number } | null
   ruler: { x1: number; y1: number; x2: number; y2: number; cells: number } | null
+  sharedRulers: Array<RulerMark & { authorName: string }>
   sketches: MapSketch[]
   letterbox: Letterbox
 }
 
-export type MapSketch =
-  | { kind: 'stroke'; color: string; points: Array<{ x: number; y: number }> }
-  | { kind: 'circle'; color: string; x: number; y: number; radius: number }
-  | { kind: 'line'; color: string; x1: number; y1: number; x2: number; y2: number }
+export type { MapSketch }
 
 export function drawMap(
   ctx: CanvasRenderingContext2D,
@@ -400,12 +399,26 @@ function drawRuler(
   viewWidth: number,
   viewHeight: number
 ): void {
-  const ruler = params.ruler
-  if (!ruler || params.camera.scale <= 0) return
+  if (params.camera.scale <= 0) return
+  if (params.ruler) paintRuler(ctx, params, viewWidth, viewHeight, params.ruler, '')
+  for (const ruler of params.sharedRulers) {
+    paintRuler(ctx, params, viewWidth, viewHeight, ruler, ruler.authorName)
+  }
+}
+
+function paintRuler(
+  ctx: CanvasRenderingContext2D,
+  params: DrawParams,
+  viewWidth: number,
+  viewHeight: number,
+  ruler: RulerMark,
+  authorName: string
+): void {
   const start = worldToScreen(params.camera, ruler.x1, ruler.y1, viewWidth, viewHeight)
   const end = worldToScreen(params.camera, ruler.x2, ruler.y2, viewWidth, viewHeight)
   ctx.save()
   ctx.strokeStyle = '#f6f1e7'
+  ctx.fillStyle = '#f6f1e7'
   ctx.lineWidth = 2
   ctx.beginPath()
   ctx.moveTo(start.x, start.y)
@@ -417,7 +430,7 @@ function drawRuler(
   ctx.beginPath()
   ctx.arc(end.x, end.y, 4, 0, Math.PI * 2)
   ctx.fill()
-  const label = `${ruler.cells}`
+  const label = authorName ? `${authorName} · ${ruler.cells}` : `${ruler.cells}`
   ctx.font = '600 16px "Segoe UI", "Avenir Next", sans-serif'
   const pad = 8
   const textWidth = ctx.measureText(label).width

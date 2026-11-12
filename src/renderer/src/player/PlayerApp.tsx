@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { PlayerProjection } from '@shared/types'
+import type { AuthorMarks, MapSketch, RulerMark } from '@shared/marks'
 import { isTypingTarget, type RemoteTool } from '@renderer/tools'
 import { MapViewport } from '@renderer/viewport/MapViewport'
-import type { MapSketch } from '@renderer/viewport/draw'
 
 const SKETCH_COLORS = ['#d4764e', '#3f8f6b', '#4f78a8', '#e0a45a', '#f2efe6'] as const
 
@@ -31,31 +31,65 @@ function usePlayerState(): PlayerProjection | null {
   return state
 }
 
+function useMarkBoard(): AuthorMarks[] {
+  const [board, setBoard] = useState<AuthorMarks[]>([])
+  useEffect(() => {
+    const unsubscribe = window.kartographer.onMarks(setBoard)
+    void window.kartographer.getMarkBoard().then(setBoard)
+    return unsubscribe
+  }, [])
+  return board
+}
+
 export function PlayerApp(): React.JSX.Element {
   const state = usePlayerState()
-  return <PlayerStage projection={state} />
+  const board = useMarkBoard()
+  return <PlayerStage projection={state} board={board} />
 }
 
 export function PlayerStage(props: {
   projection: PlayerProjection | null
   waiting?: string
   remote?: {
+    peerId: string
+    authorName: string
     movableTokenIds: string[]
     onPointer: (x: number, y: number) => void
     onMoveToken: (id: string, x: number, y: number) => void
+    onMarks: (marks: AuthorMarks) => void
   }
+  board?: AuthorMarks[]
   onLeave?: () => void
 }): React.JSX.Element {
   const [tool, setTool] = useState<RemoteTool>('pan')
   const [sketchColor, setSketchColor] = useState<string>(SKETCH_COLORS[2])
   const [sketches, setSketches] = useState<MapSketch[]>([])
+  const [draft, setDraft] = useState<MapSketch | null>(null)
+  const [ruler, setRuler] = useState<RulerMark | null>(null)
+  const [clearMarks, setClearMarks] = useState(0)
   const sceneId = props.projection?.scene?.id ?? null
   const remote = props.remote != null
 
+  const remotePeer = props.remote?.peerId ?? ''
+  const remoteName = props.remote?.authorName ?? ''
+  const onMarksRef = useRef(props.remote?.onMarks)
+  onMarksRef.current = props.remote?.onMarks
+
   useEffect(() => {
     setSketches([])
+    setDraft(null)
+    setRuler(null)
+    setClearMarks((current) => current + 1)
     setTool('pan')
   }, [sceneId])
+
+  useEffect(() => {
+    if (!remotePeer || !sceneId) return
+    const timer = window.setTimeout(() => {
+      onMarksRef.current?.({ authorId: remotePeer, authorName: remoteName, sceneId, sketches, draft, ruler })
+    }, 40)
+    return () => window.clearTimeout(timer)
+  }, [remotePeer, remoteName, sceneId, sketches, draft, ruler])
 
   useEffect(() => {
     if (!remote) return
@@ -120,7 +154,16 @@ export function PlayerStage(props: {
                 onClick={() => setSketchColor(color)}
               />
             ))}
-          <button type="button" disabled={sketches.length === 0} onClick={() => setSketches([])}>
+          <button
+            type="button"
+            disabled={sketches.length === 0 && draft == null && ruler == null}
+            onClick={() => {
+              setSketches([])
+              setDraft(null)
+              setRuler(null)
+              setClearMarks((current) => current + 1)
+            }}
+          >
             Clear
           </button>
         </div>
@@ -134,9 +177,13 @@ export function PlayerStage(props: {
         role="player"
         remote={remote}
         movableTokenIds={props.remote?.movableTokenIds}
-        sketches={remote ? sketches : undefined}
+        sketches={visibleSketches(props.board ?? [], scene.id, props.remote?.peerId, sketches)}
+        sharedRulers={visibleRulers(props.board ?? [], scene.id, props.remote?.peerId)}
         sketchColor={sketchColor}
+        clearMarks={clearMarks}
         onSketch={(sketch) => setSketches((current) => [...current.slice(-39), sketch])}
+        onDraft={setDraft}
+        onRuler={setRuler}
         sceneId={scene.id}
         imageUrl={scene.imageUrl}
         imageWidth={scene.width}
@@ -165,5 +212,18 @@ export function PlayerStage(props: {
         onInteractionEnd={() => undefined}
       />
     </div>
+  )
+}
+
+function visibleSketches(board: AuthorMarks[], sceneId: string, selfId: string | undefined, own: MapSketch[]): MapSketch[] {
+  const shared = board
+    .filter((item) => item.sceneId === sceneId && item.authorId !== selfId)
+    .flatMap((item) => [...item.sketches, ...(item.draft ? [item.draft] : [])])
+  return [...shared, ...own]
+}
+
+function visibleRulers(board: AuthorMarks[], sceneId: string, selfId: string | undefined): Array<RulerMark & { authorName: string }> {
+  return board.flatMap((item) =>
+    item.sceneId === sceneId && item.authorId !== selfId && item.ruler ? [{ ...item.ruler, authorName: item.authorName }] : []
   )
 }

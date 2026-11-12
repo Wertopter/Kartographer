@@ -7,15 +7,20 @@ const tools: Array<{ id: Tool; label: string; keyLabel: string; hint: string }> 
   { id: 'hide', label: 'Hide', keyLabel: 'H', hint: 'Paint grid cells shut again.' },
   { id: 'token', label: 'Token', keyLabel: 'T', hint: 'Create a library token, place an existing one, or drop a temporary token.' },
   { id: 'grid', label: 'Grid', keyLabel: 'G', hint: 'Align the grid to the map.' },
-  { id: 'ruler', label: 'Ruler', keyLabel: 'M', hint: 'Drag from a cell to measure the distance in whole cells.' }
+  { id: 'ruler', label: 'Ruler', keyLabel: 'M', hint: 'Drag from a cell to measure the distance. Joined players can see it.' },
+  { id: 'stroke', label: 'Draw', keyLabel: 'D', hint: 'Sketch a temporary line. Joined players can see it.' },
+  { id: 'circle', label: 'Circle', keyLabel: 'C', hint: 'Drag a temporary circle. Joined players can see it.' },
+  { id: 'line', label: 'Line', keyLabel: 'L', hint: 'Drag a temporary straight line. Joined players can see it.' }
 ]
 
 type Props = {
   tool: Tool
   mapTools: boolean
+  canClearMarks: boolean
   onTool: (tool: Tool) => void
   onRevealAll: () => void
   onCoverAll: () => void
+  onClearMarks: () => void
 }
 
 export function Toolbar(props: Props): React.JSX.Element {
@@ -23,7 +28,8 @@ export function Toolbar(props: Props): React.JSX.Element {
     <div className="toolbar">
       <div className="tool-group" role="toolbar" aria-label="Map tools">
         {tools.map((tool) => {
-          const disabled = tool.id !== 'pan' && tool.id !== 'pointer' && !props.mapTools
+          const markup = tool.id === 'ruler' || tool.id === 'stroke' || tool.id === 'circle' || tool.id === 'line'
+          const disabled = tool.id !== 'pan' && tool.id !== 'pointer' && !markup && !props.mapTools
           return (
             <button
               key={tool.id}
@@ -45,6 +51,9 @@ export function Toolbar(props: Props): React.JSX.Element {
         </button>
         <button type="button" disabled={!props.mapTools} onClick={props.onCoverAll}>
           Cover map
+        </button>
+        <button type="button" disabled={!props.canClearMarks} onClick={props.onClearMarks}>
+          Clear marks
         </button>
       </div>
     </div>

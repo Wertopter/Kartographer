@@ -12,6 +12,8 @@ export type YoutubePlayer = {
   setShuffle: (shuffle: boolean) => void
   setLoop: (loop: boolean) => void
   getVideoData: () => { title?: string }
+  getPlaylistIndex?: () => number
+  playVideoAt?: (index: number) => void
   destroy: () => void
 }
 

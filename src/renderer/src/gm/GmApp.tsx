@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { RemoteSoundtrack } from '@shared/remote'
+import type { AuthorMarks, MapSketch, RulerMark } from '@shared/marks'
 import type { Camera, GmState, GmToken, GridSettings, SoundtrackChannel } from '@shared/types'
 import { TOKEN_COLORS } from '@shared/types'
 import { CampaignList } from '@renderer/gm/CampaignList'
@@ -43,6 +45,13 @@ export function GmApp(props: { onHome: () => void }): React.JSX.Element {
   const [tokenImage, setTokenImage] = useState<string | null>(null)
   const [libraryPick, setLibraryPick] = useState<string | null>(null)
   const [gmTab, setGmTab] = useState<'map' | 'soundtrack'>('map')
+  const playbackRef = useRef<(soundtrack: RemoteSoundtrack) => void>(() => undefined)
+  const boardRef = useRef<(board: AuthorMarks[]) => void>(() => undefined)
+  const [markSketches, setMarkSketches] = useState<MapSketch[]>([])
+  const [markDraft, setMarkDraft] = useState<MapSketch | null>(null)
+  const [markRuler, setMarkRuler] = useState<RulerMark | null>(null)
+  const [peerMarks, setPeerMarks] = useState<AuthorMarks[]>([])
+  const [clearMarks, setClearMarks] = useState(0)
 
   const scene = state?.scenes.find((item) => item.id === state.activeSceneId) ?? null
   const sceneIdRef = useRef<string | null>(null)
@@ -124,6 +133,33 @@ export function GmApp(props: { onHome: () => void }): React.JSX.Element {
     sendGrid.flush()
   }, [sendCamera, sendGrid, sendMove, sendPaint])
 
+  const acceptPeerMarks = useCallback((marks: AuthorMarks) => {
+    setPeerMarks((current) => {
+      const next = current.filter((item) => item.authorId !== marks.authorId)
+      if (marks.sketches.length > 0 || marks.draft || marks.ruler) next.push(marks)
+      return next
+    })
+  }, [])
+
+  useEffect(() => {
+    setMarkSketches([])
+    setMarkDraft(null)
+    setMarkRuler(null)
+    setClearMarks((current) => current + 1)
+  }, [state?.activeSceneId])
+
+  const peerKey = state?.remotePeers.map((peer) => peer.id).join(',') ?? ''
+  useEffect(() => {
+    const sceneId = state?.activeSceneId ?? ''
+    const live = new Set(peerKey ? peerKey.split(',') : [])
+    const board: AuthorMarks[] = [
+      { authorId: 'gm', authorName: 'GM', sceneId, sketches: markSketches, draft: markDraft, ruler: markRuler },
+      ...peerMarks.filter((item) => live.has(item.authorId))
+    ]
+    boardRef.current(board)
+    void window.kartographer.publishMarks(board)
+  }, [state?.activeSceneId, peerKey, markSketches, markDraft, markRuler, peerMarks])
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (event.metaKey || event.ctrlKey || event.altKey || isTypingTarget(event.target)) return
@@ -134,7 +170,10 @@ export function GmApp(props: { onHome: () => void }): React.JSX.Element {
         h: 'hide',
         t: 'token',
         g: 'grid',
-        m: 'ruler'
+        m: 'ruler',
+        d: 'stroke',
+        c: 'circle',
+        l: 'line'
       }
       const toolKey = next[event.key.toLowerCase()]
       if (!toolKey) return
@@ -168,7 +207,8 @@ export function GmApp(props: { onHome: () => void }): React.JSX.Element {
   }
 
   const mapTools = scene?.kind === 'map'
-  const activeTool = mapTools || tool === 'pan' || tool === 'pointer' ? tool : 'pan'
+  const markup = tool === 'stroke' || tool === 'circle' || tool === 'line' || tool === 'ruler'
+  const activeTool = mapTools || tool === 'pan' || tool === 'pointer' || (scene && markup) ? tool : 'pan'
   const sceneTokens = scene && mapTools ? state.tokens.filter((token) => token.sceneId === scene.id) : []
   const selected = sceneTokens.find((token) => token.id === selectedId) ?? null
   const multipleDisplays = state.displays.length > 1
@@ -247,12 +287,19 @@ export function GmApp(props: { onHome: () => void }): React.JSX.Element {
           <Toolbar
             tool={activeTool}
             mapTools={Boolean(mapTools)}
+            canClearMarks={markSketches.length > 0 || markDraft != null || markRuler != null}
             onTool={setTool}
             onRevealAll={() => {
               if (scene) void window.kartographer.command({ type: 'revealAll', sceneId: scene.id })
             }}
             onCoverAll={() => {
               if (scene) void window.kartographer.command({ type: 'coverAll', sceneId: scene.id })
+            }}
+            onClearMarks={() => {
+              setMarkSketches([])
+              setMarkDraft(null)
+              setMarkRuler(null)
+              setClearMarks((current) => current + 1)
             }}
           />
         ) : null}
@@ -297,6 +344,20 @@ export function GmApp(props: { onHome: () => void }): React.JSX.Element {
               pointer={state.pointer?.sceneId === scene.id ? state.pointer : null}
               tool={activeTool}
               calibrate={calibrate}
+              sketches={[
+                ...peerMarks
+                  .filter((item) => item.sceneId === scene.id)
+                  .flatMap((item) => [...item.sketches, ...(item.draft ? [item.draft] : [])]),
+                ...markSketches
+              ]}
+              sharedRulers={peerMarks.flatMap((item) =>
+                item.sceneId === scene.id && item.ruler ? [{ ...item.ruler, authorName: item.authorName }] : []
+              )}
+              sketchColor="#f0d7a2"
+              clearMarks={clearMarks}
+              onSketch={(sketch) => setMarkSketches((current) => [...current.slice(-39), sketch])}
+              onDraft={setMarkDraft}
+              onRuler={setMarkRuler}
               onCamera={sendCamera}
               onPaint={sendPaint}
               onPointer={(x, y) => void window.kartographer.command({ type: 'pointer', sceneId: scene.id, x, y })}
@@ -418,6 +479,7 @@ export function GmApp(props: { onHome: () => void }): React.JSX.Element {
             onChange={(channels: SoundtrackChannel[]) => {
               void window.kartographer.command({ type: 'updateSoundtrack', channels })
             }}
+            onPlayback={(soundtrack) => playbackRef.current(soundtrack)}
           />
         </div>
       </section>
@@ -460,7 +522,12 @@ export function GmApp(props: { onHome: () => void }): React.JSX.Element {
               Close player view
             </button>
           )}
-          <RemoteShare campaignOpen={state.campaignOpen} />
+          <RemoteShare
+            campaignOpen={state.campaignOpen}
+            playbackRef={playbackRef}
+            boardRef={boardRef}
+            onPeerMarks={acceptPeerMarks}
+          />
         </div>
         <p className="status-note">
           {selectedDisplay?.primary && multipleDisplays

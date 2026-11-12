@@ -1,9 +1,11 @@
+import type { AuthorMarks } from '@shared/marks'
 import {
   parseDataMessage,
   presentRemoteProjection,
   projectionAssets,
   type RemoteCommand,
   type RemoteProjection,
+  type RemoteSoundtrack,
   type SignalPayload
 } from '@shared/remote'
 import type { PlayerProjection } from '@shared/types'
@@ -20,6 +22,9 @@ export type GuestSnapshot = {
   controlledTokenIds: string[]
   status: string
   live: boolean
+  soundtrack: RemoteSoundtrack | null
+  peerId: string
+  board: AuthorMarks[]
 }
 
 export class GuestRoom {
@@ -32,6 +37,9 @@ export class GuestRoom {
   private offered = false
   private closed = false
   private remote: RemoteProjection | null = null
+  private soundtrack: RemoteSoundtrack | null = null
+  private peerId = ''
+  private board: AuthorMarks[] = []
   private readonly ready = new Set<string>()
   private readonly incoming = new Map<string, Incoming>()
   private timer = 0
@@ -42,6 +50,7 @@ export class GuestRoom {
     this.emit('Joining the game.', false)
     const ticket = await joinRoom(code, name)
     if (this.closed) return
+    this.peerId = ticket.peerId
     const socket = openRoomSocket(ticket.code, ticket.token)
     this.socket = socket
     await new Promise<void>((resolve, reject) => {
@@ -106,6 +115,11 @@ export class GuestRoom {
     this.channel.send(JSON.stringify({ type: 'command', command }))
   }
 
+  sendMarks(marks: AuthorMarks): void {
+    if (this.channel?.readyState !== 'open') return
+    this.channel.send(JSON.stringify({ type: 'marks', marks }))
+  }
+
   private async offer(): Promise<void> {
     if (this.offered || !this.hostPeerId || this.closed) return
     this.offered = true
@@ -163,6 +177,16 @@ export class GuestRoom {
       this.emit(missing.length > 0 ? 'Receiving the map…' : '', true)
       return
     }
+    if (message.type === 'soundtrack') {
+      this.soundtrack = message.soundtrack
+      this.emit(this.remote?.scene ? '' : 'Receiving the map…', true)
+      return
+    }
+    if (message.type === 'mark-board') {
+      this.board = message.board
+      this.emit(this.remote?.scene ? '' : 'Receiving the map…', true)
+      return
+    }
     if (message.type !== 'asset') return
     let entry = this.incoming.get(message.hash)
     if (!entry) {
@@ -188,6 +212,7 @@ export class GuestRoom {
 
   private fail(status: string): void {
     if (this.closed) return
+    this.soundtrack = null
     this.emit(status, false)
   }
 
@@ -197,7 +222,10 @@ export class GuestRoom {
       projection,
       controlledTokenIds: this.remote?.controlledTokenIds ?? [],
       status: projection?.scene ? '' : status || (live ? 'Receiving the map…' : status),
-      live
+      live,
+      soundtrack: live ? this.soundtrack : null,
+      peerId: this.peerId,
+      board: live ? this.board : []
     })
   }
 }

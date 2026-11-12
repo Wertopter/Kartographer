@@ -1,4 +1,5 @@
 import { cellAt, isCellRevealed } from '@shared/geometry'
+import { sanitizeAuthorMarks, sanitizeMarkBoard, type AuthorMarks } from '@shared/marks'
 import type { Command, PlayerProjection, PointerPing, Scene, Token } from '@shared/types'
 
 /** Deployed Worker origin, without a trailing slash. Replace this after `wrangler deploy`. */
@@ -61,8 +62,27 @@ export type RemoteCommand =
   | { type: 'pointer'; x: number; y: number }
   | { type: 'moveToken'; tokenId: string; x: number; y: number }
 
+export type RemoteSoundtrackChannel = {
+  id: string
+  url: string
+  volume: number
+  playing: boolean
+  position: number
+  at: number
+  playlistIndex: number | null
+  shuffle: boolean
+  loop: boolean
+}
+
+export type RemoteSoundtrack = {
+  channels: RemoteSoundtrackChannel[]
+}
+
 export type DataMessage =
   | { type: 'projection'; projection: RemoteProjection }
+  | { type: 'soundtrack'; soundtrack: RemoteSoundtrack }
+  | { type: 'marks'; marks: AuthorMarks }
+  | { type: 'mark-board'; board: AuthorMarks[] }
   | { type: 'need'; hashes: string[] }
   | { type: 'asset'; hash: string; mime: string; index: number; count: number; data: string }
   | { type: 'command'; command: RemoteCommand }
@@ -242,6 +262,9 @@ export function parseDataMessage(raw: string): DataMessage | null {
     count?: unknown
     data?: unknown
     command?: unknown
+    soundtrack?: unknown
+    marks?: unknown
+    board?: unknown
   }
   if (message.type === 'command') {
     const command = parseRemoteCommand(message.command)
@@ -277,7 +300,52 @@ export function parseDataMessage(raw: string): DataMessage | null {
     const projection = parseProjection(message.projection)
     return projection ? { type: 'projection', projection } : null
   }
+  if (message.type === 'soundtrack') {
+    const soundtrack = parseSoundtrack(message.soundtrack)
+    return soundtrack ? { type: 'soundtrack', soundtrack } : null
+  }
+  if (message.type === 'marks') {
+    const marks = sanitizeAuthorMarks(message.marks)
+    return marks ? { type: 'marks', marks } : null
+  }
+  if (message.type === 'mark-board') {
+    return { type: 'mark-board', board: sanitizeMarkBoard(message.board) }
+  }
   return null
+}
+
+function parseSoundtrack(value: unknown): RemoteSoundtrack | null {
+  if (!value || typeof value !== 'object') return null
+  const channels = (value as { channels?: unknown }).channels
+  if (!Array.isArray(channels)) return null
+  const parsed: RemoteSoundtrackChannel[] = []
+  for (const item of channels.slice(0, 8)) {
+    if (!item || typeof item !== 'object') return null
+    const channel = item as Partial<RemoteSoundtrackChannel>
+    if (typeof channel.id !== 'string' || !/^ch-[1-8]$/.test(channel.id)) return null
+    if (typeof channel.url !== 'string' || channel.url.length > 2000) return null
+    if (!finite(channel.volume) || !finite(channel.position) || !finite(channel.at)) return null
+    if (typeof channel.playing !== 'boolean') return null
+    if (typeof channel.shuffle !== 'boolean' || typeof channel.loop !== 'boolean') return null
+    const playlistIndex =
+      channel.playlistIndex == null
+        ? null
+        : Number.isInteger(channel.playlistIndex) && (channel.playlistIndex as number) >= 0
+          ? (channel.playlistIndex as number)
+          : null
+    parsed.push({
+      id: channel.id,
+      url: channel.url,
+      volume: Math.min(100, Math.max(0, Math.round(channel.volume))),
+      playing: channel.playing,
+      position: Math.max(0, channel.position),
+      at: channel.at,
+      playlistIndex,
+      shuffle: channel.shuffle,
+      loop: channel.loop
+    })
+  }
+  return { channels: parsed }
 }
 
 function parseProjection(value: unknown): RemoteProjection | null {

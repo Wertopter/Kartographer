@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { PlayerStage } from '@renderer/player/PlayerApp'
+import { RemoteSoundtrackPlayer } from '@renderer/player/RemoteSoundtrack'
 import { GuestRoom, type GuestSnapshot } from '@renderer/remote/guestRoom'
 
 type Props = {
@@ -92,15 +93,21 @@ export function GuestApp(props: Props): React.JSX.Element {
   }
 
   return (
+    <>
+    <RemoteSoundtrackPlayer soundtrack={snapshot.soundtrack} />
     <PlayerStage
       projection={snapshot.projection}
       waiting={snapshot.status || 'Waiting for the GM.'}
       onLeave={leave}
       remote={{
+        peerId: snapshot.peerId,
+        authorName: name,
         movableTokenIds: snapshot.controlledTokenIds,
         onPointer: (x, y) => roomRef.current?.send({ type: 'pointer', x, y }),
-        onMoveToken: (tokenId, x, y) => roomRef.current?.send({ type: 'moveToken', tokenId, x, y })
+        onMoveToken: (tokenId, x, y) => roomRef.current?.send({ type: 'moveToken', tokenId, x, y }),
+        onMarks: (marks) => roomRef.current?.sendMarks(marks)
       }}
     />
+    </>
   )
 }

@@ -10,11 +10,13 @@ import {
   session as electronSession,
   shell
 } from 'electron'
+import { sanitizeMarkBoard, type AuthorMarks } from '@shared/marks'
 import { parseRemoteCommand, signalOrigin } from '@shared/remote'
 import type { Command, RemotePeer } from '@shared/types'
 import { channels } from '@shared/api'
 import { readAsset, writeRemoteAsset } from './assets'
 import { Session } from './session'
+import { checkForUpdates, setupAutoUpdate } from './updates'
 import { createGmWindow, createPlayerWindow, externalDisplayId, listDisplays } from './windows'
 
 const allowSecondInstance = process.env.KARTOGRAPHER_ALLOW_SECOND_INSTANCE === '1'
@@ -41,6 +43,7 @@ if (!hasLock) {
   let playerWindow: BrowserWindow | null = null
   let playerGeneration = 0
   let playerFillId: number | null = null
+  let markBoard: AuthorMarks[] = []
   let quitting = false
 
   function broadcast(): void {
@@ -50,6 +53,7 @@ if (!hasLock) {
     if (gmWindow && !gmWindow.isDestroyed()) gmWindow.webContents.send(channels.gmState, gmState)
     if (playerWindow && !playerWindow.isDestroyed()) {
       playerWindow.webContents.send(channels.playerState, playerState)
+      playerWindow.webContents.send(channels.marks, markBoard)
     }
   }
 
@@ -184,7 +188,11 @@ if (!hasLock) {
         },
         { role: 'editMenu' },
         { role: 'viewMenu' },
-        { role: 'windowMenu' }
+        { role: 'windowMenu' },
+        {
+          label: 'Help',
+          submenu: [{ label: 'Check for Updates…', click: () => checkForUpdates(() => gmWindow) }]
+        }
       ])
     )
   }
@@ -205,6 +213,7 @@ if (!hasLock) {
 
     installMenu()
     gmWindow = createGmWindow()
+    setupAutoUpdate(() => gmWindow)
     gmWindow.on('closed', () => {
       gmWindow = null
       if (process.platform !== 'darwin') app.quit()
@@ -287,6 +296,14 @@ if (!hasLock) {
       if (!asset) return null
       return { mime: asset.mime, data: asset.data }
     })
+    ipcMain.handle(channels.publishMarks, (event, board: unknown) => {
+      if (!isGm(event.sender.id)) return
+      markBoard = sanitizeMarkBoard(board)
+      if (playerWindow && !playerWindow.isDestroyed()) {
+        playerWindow.webContents.send(channels.marks, markBoard)
+      }
+    })
+    ipcMain.handle(channels.getMarkBoard, () => markBoard)
     ipcMain.handle(channels.writeRemoteAsset, (event, hash: string, data: Uint8Array, mime: string) => {
       if (!isGm(event.sender.id) || typeof hash !== 'string' || typeof mime !== 'string' || !(data instanceof Uint8Array)) {
         return false

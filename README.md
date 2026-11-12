@@ -62,8 +62,8 @@ An unsigned Mac build opens the first time with a right-click and **Open** (Gate
 
 ## Remote players
 
-**Join a game** on another computer connects to a player view the GM is sharing. The GM clicks **Share player view** and reads out the invite code. A joined player starts on the shared camera and can pan, zoom, and fit that view on their own screen. **Follow GM** snaps them back. They can drop a pointer ping on a revealed cell, measure with the ruler, and sketch lines, circles, and freehand marks that stay on their screen until they clear them or the scene changes. Those drawings are not sent to the GM or the table display. They can also move a token the GM assigns under **Player control**.
+**Join a game** on another computer connects to a player view the GM is sharing. The GM clicks **Share player view** and reads out the invite code. A joined player starts on the shared camera and can pan, zoom, and fit that view on their own screen. **Follow GM** snaps them back. They can drop a pointer ping on a revealed cell, measure with the ruler, and sketch lines, circles, and freehand marks. The GM and every joined player see those marks, and the players see the GM's ruler and drawings too. **Clear** removes that person's marks. They disappear when the scene changes. They can also move a token the GM assigns under **Player control**.
 
 Sharing uses a Cloudflare Worker for the introduction and for TURN when a direct connection is blocked. Deploy that Worker from `cloudflare/README.md`, then set `SIGNAL_URL` in `src/shared/remote.ts` to its origin. The campaign itself stays on the GM's computer.
 
-The guest receives the full map image and draws fog on top. Someone with that file can look under the fog. Soundtrack stays on the GM's machine.
+The guest receives the full map image and draws fog on top. Someone with that file can look under the fog. Joined players also hear the GM's YouTube soundtrack. The host chooses the tracks, playback, and mix. Each player can turn that music up or down on their own screen. If the computer blocks autoplay, **Hear the soundtrack** starts it.

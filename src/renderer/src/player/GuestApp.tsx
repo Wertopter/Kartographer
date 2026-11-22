@@ -97,6 +97,7 @@ export function GuestApp(props: Props): React.JSX.Element {
     <RemoteSoundtrackPlayer soundtrack={snapshot.soundtrack} />
     <PlayerStage
       projection={snapshot.projection}
+      board={snapshot.board}
       waiting={snapshot.status || 'Waiting for the GM.'}
       onLeave={leave}
       remote={{

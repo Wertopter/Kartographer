@@ -99,6 +99,7 @@ function ChannelRow(props: RowProps): React.JSX.Element {
   const volumeRef = useRef(props.channel.volume)
   const stopRequested = useRef(false)
   const phaseRef = useRef<Phase>('idle')
+  const reportRef = useRef<(immediate: boolean) => void>(() => undefined)
   phaseRef.current = phase
   const [playlistShuffle, setPlaylistShuffle] = useState(false)
   const [playlistLoop, setPlaylistLoop] = useState(false)
@@ -184,6 +185,7 @@ function ChannelRow(props: RowProps): React.JSX.Element {
               if (cancelled) return
               const nextTitle = event.target.getVideoData()?.title
               if (nextTitle) setTitle(nextTitle)
+              reportRef.current(true)
               if (event.data === YT.PlayerState.ENDED && loopVideo && !stopRequested.current) {
                 event.target.seekTo(0, true)
                 event.target.playVideo()
@@ -260,11 +262,14 @@ function ChannelRow(props: RowProps): React.JSX.Element {
   function reportLive(immediate: boolean): void {
     let position = 0
     let playlistIndex: number | null = null
+    let videoId: string | null = null
     try {
       const current = ytRef.current?.getCurrentTime()
       if (typeof current === 'number' && Number.isFinite(current)) position = current
       const index = ytRef.current?.getPlaylistIndex?.()
       if (typeof index === 'number' && index >= 0) playlistIndex = index
+      const id = ytRef.current?.getVideoData()?.video_id
+      if (typeof id === 'string' && /^[A-Za-z0-9_-]{11}$/.test(id)) videoId = id
     } catch {
       // The player reports time once a video is cued.
     }
@@ -276,6 +281,7 @@ function ChannelRow(props: RowProps): React.JSX.Element {
         playing: phaseRef.current === 'playing' && !stopRequested.current,
         position: stopRequested.current ? 0 : position,
         at: Date.now(),
+        videoId,
         playlistIndex,
         shuffle: shuffleRef.current,
         loop: loopPlaylistRef.current
@@ -283,6 +289,7 @@ function ChannelRow(props: RowProps): React.JSX.Element {
       immediate
     )
   }
+  reportRef.current = reportLive
 
   function commit(): void {
     const next = draft.trim()
@@ -492,6 +499,7 @@ function silentChannel(channel: SoundtrackChannel): RemoteSoundtrackChannel {
     playing: false,
     position: 0,
     at: Date.now(),
+    videoId: null,
     playlistIndex: null,
     shuffle: false,
     loop: false

@@ -100,7 +100,6 @@ function Listener(props: {
           playerVars: {
             playsinline: 1,
             rel: 0,
-            ...(playlistId ? { list: playlistId, listType: 'playlist' } : {}),
             ...(origin ? { origin } : {})
           },
           events: {
@@ -139,25 +138,26 @@ function Listener(props: {
     } catch {
       // Volume applies once the player can accept it.
     }
-    if (currentSource.playlistId) {
-      try {
-        player.setShuffle(props.channel.shuffle)
-        player.setLoop(props.channel.loop)
-      } catch {
-        // Playlist options apply once the list is ready.
-      }
-      const index = player.getPlaylistIndex?.()
-      if (props.channel.playlistIndex != null && index !== props.channel.playlistIndex) {
-        try {
-          player.playVideoAt?.(props.channel.playlistIndex)
-        } catch {
-          // The playlist index applies once the list has loaded.
-        }
-      }
-    }
     const expected = props.channel.playing
       ? props.channel.position + Math.max(0, Date.now() - props.channel.at) / 1000
       : props.channel.position
+    const wanted = props.channel.videoId || currentSource.videoId
+    let loaded = ''
+    try {
+      loaded = player.getVideoData()?.video_id ?? ''
+    } catch {
+      loaded = ''
+    }
+    if (wanted && loaded !== wanted) {
+      const start = Math.max(0, expected)
+      try {
+        if (props.channel.playing) player.loadVideoById?.(wanted, start)
+        else player.cueVideoById?.(wanted, start)
+      } catch {
+        // The next video loads once the player can accept it.
+      }
+      return
+    }
     let current = Number.NaN
     try {
       current = player.getCurrentTime()
@@ -187,9 +187,7 @@ function Listener(props: {
     props.channel.playing,
     props.channel.position,
     props.channel.at,
-    props.channel.shuffle,
-    props.channel.loop,
-    props.channel.playlistIndex
+    props.channel.videoId
   ])
 
   return <div ref={hostRef} className="channel-player" />

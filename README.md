@@ -66,4 +66,4 @@ An unsigned Mac build opens the first time with a right-click and **Open** (Gate
 
 Sharing uses a Cloudflare Worker for the introduction and for TURN when a direct connection is blocked. Deploy that Worker from `cloudflare/README.md`, then set `SIGNAL_URL` in `src/shared/remote.ts` to its origin. The campaign itself stays on the GM's computer.
 
-The guest receives the full map image and draws fog on top. Someone with that file can look under the fog. Joined players also hear the GM's YouTube soundtrack. The host chooses the tracks, playback, and mix. Each player can turn that music up or down on their own screen. If the computer blocks autoplay, **Hear the soundtrack** starts it.
+The guest receives the full map image and draws fog on top. Someone with that file can look under the fog. Joined players also hear the GM's YouTube soundtrack, including the same playlist song the host is on. Shuffle stays on the host's player, and everyone else loads that exact video. The host chooses the tracks, playback, and mix. Each player can turn that music up or down on their own screen. If the computer blocks autoplay, **Hear the soundtrack** starts it.

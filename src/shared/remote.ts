@@ -69,6 +69,8 @@ export type RemoteSoundtrackChannel = {
   playing: boolean
   position: number
   at: number
+  /** The exact video the host is hearing. Players load this instead of shuffling a playlist themselves. */
+  videoId: string | null
   playlistIndex: number | null
   shuffle: boolean
   loop: boolean
@@ -333,6 +335,8 @@ function parseSoundtrack(value: unknown): RemoteSoundtrack | null {
         : Number.isInteger(channel.playlistIndex) && (channel.playlistIndex as number) >= 0
           ? (channel.playlistIndex as number)
           : null
+    const videoId =
+      typeof channel.videoId === 'string' && /^[A-Za-z0-9_-]{11}$/.test(channel.videoId) ? channel.videoId : null
     parsed.push({
       id: channel.id,
       url: channel.url,
@@ -340,6 +344,7 @@ function parseSoundtrack(value: unknown): RemoteSoundtrack | null {
       playing: channel.playing,
       position: Math.max(0, channel.position),
       at: channel.at,
+      videoId,
       playlistIndex,
       shuffle: channel.shuffle,
       loop: channel.loop

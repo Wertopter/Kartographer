@@ -77,8 +77,8 @@ export function drawMap(
   if (params.showGrid && params.grid) {
     drawGrid(ctx, params, origin, drawnWidth, drawnHeight, viewWidth, viewHeight)
   }
-  for (const token of params.tokens) drawToken(ctx, token, params.camera, viewWidth, viewHeight)
   drawSketches(ctx, params, viewWidth, viewHeight)
+  for (const token of params.tokens) drawToken(ctx, token, params.camera, viewWidth, viewHeight)
   drawPointer(ctx, params, viewWidth, viewHeight)
   drawMeasure(ctx, params, viewWidth, viewHeight)
   drawRuler(ctx, params, viewWidth, viewHeight)

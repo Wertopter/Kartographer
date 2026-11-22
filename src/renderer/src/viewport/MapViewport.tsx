@@ -5,9 +5,15 @@ import type { Camera, Fog, GridSettings, PointerPing } from '@shared/types'
 import { POINTER_MS } from '@shared/types'
 import { isTypingTarget, type RemoteTool, type Tool } from '@renderer/tools'
 import { drawMap, type DrawToken, type MapSketch } from '@renderer/viewport/draw'
+import { watchSceneImage, type SceneBitmap } from '@renderer/viewport/sceneImage'
 import type { RulerMark } from '@shared/marks'
 
 const SCENE_FADE_MS = 650
+
+function readySceneImage(sceneId: string | null, readyId: string | null, image: SceneBitmap | null) {
+  if (!image || readyId !== sceneId) return { image: null, sourceWidth: 0, sourceHeight: 0 }
+  return { image: image.bitmap, sourceWidth: image.width, sourceHeight: image.height }
+}
 
 function sketchWorthKeeping(sketch: MapSketch, scale: number): boolean {
   const min = 4 / Math.max(scale, 0.02)
@@ -100,7 +106,7 @@ export function MapViewport(props: Props): React.JSX.Element {
   propsRef.current = props
   cameraRef.current = liveCamera
 
-  const [sceneImage, setSceneImage] = useState<HTMLImageElement | null>(null)
+  const [sceneImage, setSceneImage] = useState<SceneBitmap | null>(null)
   const [tokenImages, setTokenImages] = useState<Map<string, HTMLImageElement>>(new Map())
   const imageSceneIdRef = useRef<string | null>(null)
   const seenSceneRef = useRef<string | null | undefined>(undefined)
@@ -140,16 +146,17 @@ export function MapViewport(props: Props): React.JSX.Element {
       return
     }
     const sceneId = props.sceneId
-    const image = new Image()
-    image.onload = () => {
+    let active = true
+    const stop = watchSceneImage(props.imageUrl, props.imageWidth, props.imageHeight, (image) => {
+      if (!active) return
       imageSceneIdRef.current = sceneId
       setSceneImage(image)
-    }
-    image.src = props.imageUrl
+    })
     return () => {
-      image.onload = null
+      active = false
+      stop()
     }
-  }, [props.imageUrl, props.sceneId])
+  }, [props.imageUrl, props.sceneId, props.imageWidth, props.imageHeight])
 
   const tokenKey = props.tokens.map((token) => token.imageUrl ?? '').join('|')
   useEffect(() => {
@@ -250,7 +257,7 @@ export function MapViewport(props: Props): React.JSX.Element {
       cssWidth: size.w,
       cssHeight: size.h,
       dpr: window.devicePixelRatio || 1,
-      image: imageSceneIdRef.current === sceneId ? sceneImage : null,
+      ...readySceneImage(sceneId, imageSceneIdRef.current, sceneImage),
       imageWidth: props.imageWidth,
       imageHeight: props.imageHeight,
       camera: framed,
@@ -299,7 +306,7 @@ export function MapViewport(props: Props): React.JSX.Element {
           cssWidth: size.w,
           cssHeight: size.h,
           dpr: window.devicePixelRatio || 1,
-          image: imageSceneIdRef.current === props.sceneId ? sceneImage : null,
+          ...readySceneImage(props.sceneId, imageSceneIdRef.current, sceneImage),
           imageWidth: props.imageWidth,
           imageHeight: props.imageHeight,
           camera: view.camera,

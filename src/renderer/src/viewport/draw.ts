@@ -22,6 +22,9 @@ export type DrawParams = {
   image: CanvasImageSource | null
   imageWidth: number
   imageHeight: number
+  /** Pixel size of `image`. Smaller than the scene while a preview is on screen. */
+  sourceWidth: number
+  sourceHeight: number
   camera: Camera
   grid: GridSettings | null
   showGrid: boolean
@@ -47,8 +50,14 @@ export function drawMap(
   const width = Math.max(1, params.cssWidth)
   const height = Math.max(1, params.cssHeight)
   const dpr = params.dpr || 1
-  canvas.width = Math.floor(width * dpr)
-  canvas.height = Math.floor(height * dpr)
+  const pixelWidth = Math.floor(width * dpr)
+  const pixelHeight = Math.floor(height * dpr)
+  // Resizing the canvas drops its backing store. Skip that when the view is unchanged
+  // so a slow map upload cannot present an empty frame.
+  if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+    canvas.width = pixelWidth
+    canvas.height = pixelHeight
+  }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
   ctx.clearRect(0, 0, width, height)
   ctx.imageSmoothingEnabled = true
@@ -73,7 +82,9 @@ export function drawMap(
   const drawnWidth = params.imageWidth * params.camera.scale
   const drawnHeight = params.imageHeight * params.camera.scale
 
+  ctx.imageSmoothingQuality = 'medium'
   drawSceneImage(ctx, params, origin, drawnWidth, drawnHeight, viewWidth, viewHeight)
+  ctx.imageSmoothingQuality = 'high'
   if (params.showGrid && params.grid) {
     drawGrid(ctx, params, origin, drawnWidth, drawnHeight, viewWidth, viewHeight)
   }
@@ -94,7 +105,7 @@ function drawSceneImage(
   viewWidth: number,
   viewHeight: number
 ): void {
-  const { image, fog, fogStyle, camera, grid, imageWidth, imageHeight } = params
+  const { image, fog, fogStyle, camera, grid } = params
   if (!image) return
   const paintFull =
     fogStyle === 'none' || fog.mode === 'none' || fog.mode === 'revealed' || !grid
@@ -111,7 +122,7 @@ function drawSceneImage(
     ctx.fillStyle = 'rgba(6, 5, 4, 0.72)'
     ctx.fillRect(origin.x, origin.y, drawnWidth, drawnHeight)
     if (fog.mode === 'partial') {
-      paintCells(ctx, image, fog.cells, grid, imageWidth, imageHeight, camera, viewWidth, viewHeight)
+      paintCells(ctx, params, fog.cells, grid, camera, viewWidth, viewHeight)
     }
     ctx.restore()
     return
@@ -121,24 +132,28 @@ function drawSceneImage(
     ctx.beginPath()
     ctx.rect(origin.x, origin.y, drawnWidth, drawnHeight)
     ctx.clip()
-    paintCells(ctx, image, fog.cells, grid, imageWidth, imageHeight, camera, viewWidth, viewHeight)
+    paintCells(ctx, params, fog.cells, grid, camera, viewWidth, viewHeight)
     ctx.restore()
   }
 }
 
 function paintCells(
   ctx: CanvasRenderingContext2D,
-  image: CanvasImageSource,
+  params: DrawParams,
   cells: number[],
   grid: GridSettings,
-  imageWidth: number,
-  imageHeight: number,
   camera: Camera,
   viewWidth: number,
   viewHeight: number
 ): void {
+  const { image, imageWidth, imageHeight } = params
+  if (!image) return
   const metrics = gridMetrics(imageWidth, imageHeight, grid)
   if (!metrics) return
+  const bitmapWidth = params.sourceWidth > 0 ? params.sourceWidth : imageWidth
+  const bitmapHeight = params.sourceHeight > 0 ? params.sourceHeight : imageHeight
+  const scaleX = imageWidth > 0 ? bitmapWidth / imageWidth : 1
+  const scaleY = imageHeight > 0 ? bitmapHeight / imageHeight : 1
   for (const cell of cells) {
     if (cell < 0 || cell >= metrics.count) continue
     const outline = cellOutline(cell, grid, metrics)
@@ -163,11 +178,26 @@ function paintCells(
     const destW = sourceW * camera.scale
     const destH = sourceH * camera.scale
     if (dest.x + destW < 0 || dest.y + destH < 0 || dest.x > viewWidth || dest.y > viewHeight) continue
+    let sampleX = sourceX * scaleX
+    let sampleY = sourceY * scaleY
+    let sampleW = sourceW * scaleX
+    let sampleH = sourceH * scaleY
+    if (sampleX < 0) {
+      sampleW += sampleX
+      sampleX = 0
+    }
+    if (sampleY < 0) {
+      sampleH += sampleY
+      sampleY = 0
+    }
+    if (sampleX + sampleW > bitmapWidth) sampleW = bitmapWidth - sampleX
+    if (sampleY + sampleH > bitmapHeight) sampleH = bitmapHeight - sampleY
+    if (sampleW <= 0 || sampleH <= 0) continue
     ctx.save()
     ctx.beginPath()
     traceOutline(ctx, outline, camera, viewWidth, viewHeight)
     ctx.clip()
-    ctx.drawImage(image, sourceX, sourceY, sourceW, sourceH, dest.x, dest.y, destW, destH)
+    ctx.drawImage(image, sampleX, sampleY, sampleW, sampleH, dest.x, dest.y, destW, destH)
     ctx.restore()
   }
 }

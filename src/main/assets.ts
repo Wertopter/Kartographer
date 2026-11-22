@@ -41,7 +41,8 @@ export async function readAsset(assetsDir: string, requestUrl: string, remoteDir
     return new Response(new Uint8Array(data), {
       headers: {
         'Content-Type': mimeType(fileName),
-        'Cache-Control': 'no-cache'
+        'Cache-Control': 'no-cache',
+        'Access-Control-Allow-Origin': '*'
       }
     })
   } catch {
@@ -61,7 +62,8 @@ async function readRemote(remoteDir: string, pathname: string): Promise<Response
     return new Response(new Uint8Array(data), {
       headers: {
         'Content-Type': mime.trim() || 'application/octet-stream',
-        'Cache-Control': 'no-cache'
+        'Cache-Control': 'no-cache',
+        'Access-Control-Allow-Origin': '*'
       }
     })
   } catch {

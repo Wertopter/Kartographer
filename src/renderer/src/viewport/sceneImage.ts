@@ -1,5 +1,5 @@
 export type SceneBitmap = {
-  bitmap: ImageBitmap
+  bitmap: CanvasImageSource
   width: number
   height: number
   /** False while the sharp copy is still decoding and `bitmap` is the preview. */
@@ -10,7 +10,7 @@ type Listener = (image: SceneBitmap) => void
 
 type Entry = {
   preview: ImageBitmap | null
-  full: ImageBitmap | null
+  full: CanvasImageSource | null
   loading: Promise<void> | null
   listeners: Set<Listener>
 }
@@ -38,9 +38,34 @@ function scaledSize(
   }
 }
 
-function publish(entry: Entry, bitmap: ImageBitmap, full: boolean): void {
-  const image: SceneBitmap = { bitmap, width: bitmap.width, height: bitmap.height, full }
+function sourcePixels(source: CanvasImageSource): { width: number; height: number } {
+  if (source instanceof HTMLImageElement) return { width: source.naturalWidth, height: source.naturalHeight }
+  if (source instanceof ImageBitmap || source instanceof HTMLCanvasElement) {
+    return { width: source.width, height: source.height }
+  }
+  return { width: 0, height: 0 }
+}
+
+function closeSource(source: CanvasImageSource | null): void {
+  if (source instanceof ImageBitmap) source.close()
+}
+
+function publish(entry: Entry, source: CanvasImageSource, full: boolean): void {
+  const size = sourcePixels(source)
+  const image: SceneBitmap = { bitmap: source, width: size.width, height: size.height, full }
   for (const listener of entry.listeners) listener(image)
+}
+
+function loadElement(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image()
+    image.onload = () => {
+      if (image.naturalWidth > 0 && image.naturalHeight > 0) resolve(image)
+      else reject(new Error('Map image has no pixels'))
+    }
+    image.onerror = () => reject(new Error('Could not load map image'))
+    image.src = url
+  })
 }
 
 function remember(order: string[], url: string, limit: number, release: (url: string) => void): void {
@@ -65,7 +90,7 @@ function rememberPreview(url: string): void {
   remember(previewOrder, url, MAX_PREVIEWS, (oldest) => {
     const entry = entries.get(oldest)
     if (!entry?.preview) return
-    entry.preview.close()
+    closeSource(entry.preview)
     entry.preview = null
     if (!entry.full && !entry.loading && entry.listeners.size === 0) entries.delete(oldest)
   })
@@ -75,7 +100,7 @@ function rememberFull(url: string): void {
   remember(fullOrder, url, MAX_FULL, (oldest) => {
     const entry = entries.get(oldest)
     if (!entry?.full) return
-    entry.full.close()
+    closeSource(entry.full)
     entry.full = null
     if (!entry.preview && entry.listeners.size === 0) entries.delete(oldest)
   })
@@ -83,41 +108,60 @@ function rememberFull(url: string): void {
 
 async function loadEntry(url: string, imageWidth: number, imageHeight: number, entry: Entry): Promise<void> {
   try {
-    const response = await fetch(url)
-    if (!response.ok) return
-    const blob = await response.blob()
-    const previewSize = scaledSize(imageWidth, imageHeight, PREVIEW_LONG_EDGE)
+    const element = await loadElement(url)
+    const width = imageWidth > 0 ? imageWidth : element.naturalWidth
+    const height = imageHeight > 0 ? imageHeight : element.naturalHeight
+    const previewSize = scaledSize(width, height, PREVIEW_LONG_EDGE)
     if (previewSize && !entry.preview && !entry.full) {
-      const preview = await createImageBitmap(blob, {
-        resizeWidth: previewSize.width,
-        resizeHeight: previewSize.height,
-        resizeQuality: 'low'
-      })
-      if (entry.full) {
-        preview.close()
-      } else {
-        entry.preview = preview
-        rememberPreview(url)
-        publish(entry, preview, false)
+      try {
+        const preview = await createImageBitmap(element, {
+          resizeWidth: previewSize.width,
+          resizeHeight: previewSize.height,
+          resizeQuality: 'low'
+        })
+        if (entry.full) preview.close()
+        else {
+          entry.preview = preview
+          rememberPreview(url)
+          publish(entry, preview, false)
+        }
+      } catch (error) {
+        console.error('Map preview failed', error)
       }
     }
 
-    if (entry.full) return
-    const fullSize = scaledSize(imageWidth, imageHeight, FULL_LONG_EDGE)
-    const full = fullSize
-      ? await createImageBitmap(blob, {
-          resizeWidth: fullSize.width,
-          resizeHeight: fullSize.height,
-          resizeQuality: 'medium'
-        })
-      : await createImageBitmap(blob)
-    if (entry.full) {
-      full.close()
+    if (!entry.preview && !entry.full) {
+      entry.full = element
+      rememberFull(url)
+      publish(entry, element, true)
       return
     }
-    entry.full = full
-    rememberFull(url)
-    publish(entry, full, true)
+
+    if (entry.full) return
+    const fullSize = scaledSize(width, height, FULL_LONG_EDGE)
+    try {
+      const full = fullSize
+        ? await createImageBitmap(element, {
+            resizeWidth: fullSize.width,
+            resizeHeight: fullSize.height,
+            resizeQuality: 'medium'
+          })
+        : await createImageBitmap(element)
+      if (entry.full) {
+        full.close()
+        return
+      }
+      entry.full = full
+      rememberFull(url)
+      publish(entry, full, true)
+    } catch (error) {
+      console.error('Sharp map decode failed', error)
+      if (!entry.full) {
+        entry.full = element
+        rememberFull(url)
+        publish(entry, element, true)
+      }
+    }
   } catch (error) {
     console.error('Failed to load map image', error)
   } finally {
@@ -140,10 +184,10 @@ export function watchSceneImage(
   entry.listeners.add(listener)
   if (entry.full) {
     rememberFull(url)
-    listener({ bitmap: entry.full, width: entry.full.width, height: entry.full.height, full: true })
+    publish(entry, entry.full, true)
   } else if (entry.preview) {
     rememberPreview(url)
-    listener({ bitmap: entry.preview, width: entry.preview.width, height: entry.preview.height, full: false })
+    publish(entry, entry.preview, false)
   }
   if (!entry.full && !entry.loading) {
     entry.loading = loadEntry(url, imageWidth, imageHeight, entry)

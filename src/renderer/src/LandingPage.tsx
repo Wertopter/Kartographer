@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { GmState } from '@shared/types'
+import { UpdateButton } from '@renderer/gm/UpdateButton'
 
 type Props = {
   onHost: () => void
@@ -144,6 +145,7 @@ export function LandingPage(props: Props): React.JSX.Element {
             </div>
           </form>
         )}
+        <UpdateButton />
       </div>
     </div>
   )

@@ -543,6 +543,8 @@ button[aria-pressed="true"] kbd { color: var(--accent-ink); }
 .status-group { align-items: end; }
 .status-note { flex: 1; min-width: 0; }
 .path { margin-left: auto; flex: 0 0 auto; }
+.update-button { flex: 0 0 auto; white-space: nowrap; }
+.landing-card .update-button { align-self: stretch; }
 
 @media (max-width: 860px) {
   .gm-app { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr) auto; }

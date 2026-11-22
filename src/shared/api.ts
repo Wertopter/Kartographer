@@ -26,8 +26,20 @@ export const channels = {
   getMarkBoard: 'kartographer:get-mark-board',
   gmState: 'kartographer:gm-state',
   playerState: 'kartographer:player-state',
-  marks: 'kartographer:marks'
+  marks: 'kartographer:marks',
+  updateStatus: 'kartographer:update-status',
+  getUpdateStatus: 'kartographer:get-update-status',
+  checkForUpdates: 'kartographer:check-for-updates',
+  installUpdate: 'kartographer:install-update'
 } as const
+
+export type UpdateStatus =
+  | { phase: 'idle' }
+  | { phase: 'checking' }
+  | { phase: 'downloading'; percent: number }
+  | { phase: 'ready'; version: string }
+  | { phase: 'current' }
+  | { phase: 'error'; detail: string }
 
 export type KartographerApi = {
   getState: () => Promise<GmState>
@@ -54,6 +66,10 @@ export type KartographerApi = {
   publishMarks: (board: AuthorMarks[]) => Promise<void>
   getMarkBoard: () => Promise<AuthorMarks[]>
   onMarks: (callback: (board: AuthorMarks[]) => void) => () => void
+  getUpdateStatus: () => Promise<UpdateStatus>
+  onUpdateStatus: (callback: (status: UpdateStatus) => void) => () => void
+  checkForUpdates: () => Promise<void>
+  installUpdate: () => Promise<void>
 }
 
 export type { DisplayInfo }

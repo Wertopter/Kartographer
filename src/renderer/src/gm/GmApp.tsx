@@ -11,6 +11,7 @@ import { TokenPlacePanel, type TokenPlaceMode } from '@renderer/gm/TokenPlacePan
 import { RemoteShare } from '@renderer/gm/RemoteShare'
 import { SoundtrackMixer } from '@renderer/gm/SoundtrackMixer'
 import { Toolbar } from '@renderer/gm/Toolbar'
+import { UpdateButton } from '@renderer/gm/UpdateButton'
 import { isTypingTarget, type Tool } from '@renderer/tools'
 import { throttle } from '@renderer/throttle'
 import { MapViewport } from '@renderer/viewport/MapViewport'
@@ -535,6 +536,7 @@ export function GmApp(props: { onHome: () => void }): React.JSX.Element {
             : 'Players see revealed map cells, visible tokens, and pointer pings.'}
           {state.status ? ` ${state.status}` : ''}
         </p>
+        <UpdateButton />
         <button
           type="button"
           className="path"

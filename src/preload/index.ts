@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
-import { channels, type KartographerApi } from '@shared/api'
+import { channels, type KartographerApi, type UpdateStatus } from '@shared/api'
 import type { AuthorMarks } from '@shared/marks'
 import type { RemoteCommand, RemoteProjection } from '@shared/remote'
 import type { Command, GmState, PlayerProjection, RemotePeer } from '@shared/types'
@@ -71,6 +71,20 @@ const api: KartographerApi = {
     return () => {
       ipcRenderer.removeListener(channels.marks, listener)
     }
+  },
+  getUpdateStatus: () => ipcRenderer.invoke(channels.getUpdateStatus) as Promise<UpdateStatus>,
+  onUpdateStatus: (callback) => {
+    const listener = (_event: IpcRendererEvent, status: UpdateStatus) => callback(status)
+    ipcRenderer.on(channels.updateStatus, listener)
+    return () => {
+      ipcRenderer.removeListener(channels.updateStatus, listener)
+    }
+  },
+  checkForUpdates: async () => {
+    await ipcRenderer.invoke(channels.checkForUpdates)
+  },
+  installUpdate: async () => {
+    await ipcRenderer.invoke(channels.installUpdate)
   }
 }
 

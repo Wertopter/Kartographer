@@ -16,7 +16,7 @@ import type { Command, RemotePeer } from '@shared/types'
 import { channels } from '@shared/api'
 import { readAsset, writeRemoteAsset } from './assets'
 import { Session } from './session'
-import { checkForUpdates, setupAutoUpdate } from './updates'
+import { checkForUpdates, currentUpdateStatus, installUpdate, setupAutoUpdate, subscribeUpdateStatus } from './updates'
 import { createGmWindow, createPlayerWindow, externalDisplayId, listDisplays } from './windows'
 
 const allowSecondInstance = process.env.KARTOGRAPHER_ALLOW_SECOND_INSTANCE === '1'
@@ -213,6 +213,9 @@ if (!hasLock) {
 
     installMenu()
     gmWindow = createGmWindow()
+    subscribeUpdateStatus((status) => {
+      if (gmWindow && !gmWindow.isDestroyed()) gmWindow.webContents.send(channels.updateStatus, status)
+    })
     setupAutoUpdate(() => gmWindow)
     gmWindow.on('closed', () => {
       gmWindow = null
@@ -304,6 +307,15 @@ if (!hasLock) {
       }
     })
     ipcMain.handle(channels.getMarkBoard, () => markBoard)
+    ipcMain.handle(channels.getUpdateStatus, () => currentUpdateStatus())
+    ipcMain.handle(channels.checkForUpdates, (event) => {
+      if (!isGm(event.sender.id)) return
+      checkForUpdates(() => gmWindow)
+    })
+    ipcMain.handle(channels.installUpdate, (event) => {
+      if (!isGm(event.sender.id)) return
+      installUpdate()
+    })
     ipcMain.handle(channels.writeRemoteAsset, (event, hash: string, data: Uint8Array, mime: string) => {
       if (!isGm(event.sender.id) || typeof hash !== 'string' || typeof mime !== 'string' || !(data instanceof Uint8Array)) {
         return false
